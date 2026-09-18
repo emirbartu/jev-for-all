@@ -1,0 +1,20 @@
+{
+  "name": "opencode-plugin-template",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "files": [
+    "index.ts"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opencode/plugin": "^2.0.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  }
+}

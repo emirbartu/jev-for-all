@@ -305,3 +305,88 @@ test("createWarnOnce warns once per session", () => {
     console.warn = original
   }
 })
+
+test("readOptions warns on invalid values and falls back", () => {
+  const original = console.warn
+  const calls: unknown[][] = []
+  console.warn = (...args: unknown[]) => {
+    calls.push(args)
+  }
+  try {
+    const options = readOptions({ timeoutMs: "fast" })
+    expect(options.timeoutMs).toBe(1000)
+    expect(calls.some((args) => String(args[0]).includes("timeoutMs"))).toBe(true)
+  } finally {
+    console.warn = original
+  }
+})
+
+test("prompt hook routes skills end to end", async () => {
+  const fakeFetch = (async () =>
+    new Response(
+      JSON.stringify({
+        answers: {
+          which: { type: "choice", choice: "pptx-author", probabilities: { "pptx-author": 0.9 }, confidence: 0.9 },
+          "gate::acts": { type: "noul", noul: 0.9 },
+          "gate::procedure": { type: "noul", noul: 0.8 },
+          "gate::prose": { type: "noul", noul: 0.2 },
+        },
+      }),
+      { status: 200 },
+    )) as unknown as typeof fetch
+  let promptHook: ((event: unknown) => Promise<void> | void) | undefined
+  const plugin = (await import("../index")).default
+  await plugin.setup({
+    options: { apiKey: "test", fetch: fakeFetch },
+    skill: {
+      list: async () => ({
+        data: [{ id: "pptx-author", name: "pptx-author", description: "Author decks", content: "Use python-pptx" }],
+      }),
+    },
+    session: {
+      hook: (name: string, callback: (event: unknown) => Promise<void> | void) => {
+        if (name === "prompt") promptHook = callback
+        return Promise.resolve({ dispose: async () => {} })
+      },
+    },
+  } as never)
+
+  const prompt: { text: string; skills?: Array<{ id: string }> } = { text: "build me a deck" }
+  await promptHook!({ sessionID: "s1", prompt })
+  expect(prompt.skills).toEqual([{ id: "pptx-author" }])
+})
+
+test("context hook routes tools end to end", async () => {
+  const fakeFetch = (async () =>
+    new Response(
+      JSON.stringify({
+        answers: {
+          next: { type: "choice", choice: "grep", probabilities: { grep: 0.7, edit: 0.2 }, confidence: 0.9 },
+          needs_tool: { type: "noul", noul: 0.9 },
+        },
+      }),
+      { status: 200 },
+    )) as unknown as typeof fetch
+  let contextHook: ((event: unknown) => Promise<void> | void) | undefined
+  const plugin = (await import("../index")).default
+  await plugin.setup({
+    options: { apiKey: "test", fetch: fakeFetch },
+    session: {
+      hook: (name: string, callback: (event: unknown) => Promise<void> | void) => {
+        if (name === "context") contextHook = callback
+        return Promise.resolve({ dispose: async () => {} })
+      },
+    },
+  } as never)
+
+  const tools: Record<string, unknown> = {
+    read: { description: "Read" },
+    grep: { description: "Search" },
+    edit: { description: "Edit" },
+    browser: { description: "Browse" },
+  }
+  const system: Array<{ type: string; text: string }> = []
+  await contextHook!({ sessionID: "s1", agent: "build", messages: [], tools, system })
+  expect(Object.keys(tools).sort()).toEqual(["edit", "grep", "read"])
+  expect(system[0].text).toContain("Start with: grep")
+})

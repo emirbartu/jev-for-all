@@ -205,3 +205,86 @@ test("renderState keeps the tail within budget", () => {
   expect(rendered.length).toBeLessThanOrEqual(50)
   expect(rendered).toContain("latest instruction")
 })
+
+import { createCache, hashKey, readOptions } from "../index"
+
+test("cache returns values, expires entries, and evicts the oldest", () => {
+  let now = 0
+  const cache = createCache<number>({ max: 2, ttlMs: 100, now: () => now })
+  cache.set("a", 1)
+  expect(cache.get("a")).toBe(1)
+  now = 101
+  expect(cache.get("a")).toBeUndefined()
+  cache.set("b", 2)
+  cache.set("c", 3)
+  cache.set("d", 4)
+  expect(cache.get("b")).toBeUndefined()
+  expect(cache.get("d")).toBe(4)
+})
+
+test("hashKey is stable and distinct", () => {
+  expect(hashKey("abc")).toBe(hashKey("abc"))
+  expect(hashKey("abc")).not.toBe(hashKey("abd"))
+})
+
+test("readOptions applies defaults and accepts overrides", () => {
+  const defaults = readOptions({})
+  expect(defaults.model).toBe("jev-latest")
+  expect(defaults.timeoutMs).toBe(1000)
+  expect(defaults.tools.alwaysVisible).toContain("read")
+  expect(defaults.skills.rerank).toBe("auto")
+
+  const custom = readOptions({
+    model: "jev-1.13.0",
+    timeoutMs: 500,
+    agents: ["build"],
+    tools: { maxTools: 3 },
+    skills: { rerank: false },
+  })
+  expect(custom.model).toBe("jev-1.13.0")
+  expect(custom.timeoutMs).toBe(500)
+  expect(custom.agents).toEqual(["build"])
+  expect(custom.tools.maxTools).toBe(3)
+  expect(custom.tools.alwaysVisible).toContain("read")
+  expect(custom.skills.rerank).toBe(false)
+})
+
+test("setup is inert without an API key", async () => {
+  const saved = process.env.TYPESAFE_API_KEY
+  delete process.env.TYPESAFE_API_KEY
+  try {
+    const plugin = (await import("../index")).default
+    let hooked = false
+    const context = {
+      options: {},
+      session: {
+        hook: () => {
+          hooked = true
+          return Promise.resolve({ dispose: async () => {} })
+        },
+      },
+    }
+    const cleanup = await plugin.setup(context as never)
+    expect(hooked).toBe(false)
+    expect(cleanup).toBeUndefined()
+  } finally {
+    if (saved !== undefined) process.env.TYPESAFE_API_KEY = saved
+  }
+})
+
+test("setup registers the prompt and context hooks", async () => {
+  const plugin = (await import("../index")).default
+  const names: string[] = []
+  const context = {
+    options: { apiKey: "test" },
+    session: {
+      hook: (name: string) => {
+        names.push(name)
+        return Promise.resolve({ dispose: async () => {} })
+      },
+    },
+  }
+  const cleanup = await plugin.setup(context as never)
+  expect(names).toEqual(["prompt", "context"])
+  await cleanup?.()
+})

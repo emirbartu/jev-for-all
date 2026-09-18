@@ -105,6 +105,15 @@ export function hashKey(text: string): string {
   return (hash >>> 0).toString(36)
 }
 
+export function createWarnOnce() {
+  const warned = new Set<string>()
+  return (sessionID: string, ...args: unknown[]) => {
+    if (warned.has(sessionID)) return
+    warned.add(sessionID)
+    console.warn("[system-one]", ...args)
+  }
+}
+
 export default Plugin.define({
   id: "system-one",
   async setup(ctx) {
@@ -121,6 +130,7 @@ export default Plugin.define({
     const log = (...args: unknown[]) => {
       if (options.debug) console.log("[system-one]", ...args)
     }
+    const warnOnce = createWarnOnce()
     const agentEnabled = (agent: string) => !options.agents || options.agents.includes(agent)
 
     const registrations = [
@@ -137,7 +147,7 @@ export default Plugin.define({
           }
           applySkillDecision(event.prompt as unknown as { skills?: Array<{ id: string }> }, decision)
         } catch (error) {
-          log("skill routing failed", error)
+          warnOnce(event.sessionID, "skill routing failed", error)
         }
       }),
       await ctx.session.hook("context", async (event) => {
@@ -156,7 +166,7 @@ export default Plugin.define({
           }
           if (decision) applyToolDecision(event.tools, event.system, decision)
         } catch (error) {
-          log("tool routing failed", error)
+          warnOnce(event.sessionID, "tool routing failed", error)
         }
       }),
     ]

@@ -206,7 +206,7 @@ test("renderState keeps the tail within budget", () => {
   expect(rendered).toContain("latest instruction")
 })
 
-import { createCache, hashKey, readOptions } from "../index"
+import { createCache, createWarnOnce, hashKey, readOptions } from "../index"
 
 test("cache returns values, expires entries, and evicts the oldest", () => {
   let now = 0
@@ -287,4 +287,21 @@ test("setup registers the prompt and context hooks", async () => {
   const cleanup = await plugin.setup(context as never)
   expect(names).toEqual(["prompt", "context"])
   await cleanup?.()
+})
+
+test("createWarnOnce warns once per session", () => {
+  const original = console.warn
+  const calls: unknown[][] = []
+  console.warn = (...args: unknown[]) => {
+    calls.push(args)
+  }
+  try {
+    const warnOnce = createWarnOnce()
+    warnOnce("session-a", "skill routing failed")
+    warnOnce("session-a", "skill routing failed")
+    warnOnce("session-b", "tool routing failed")
+    expect(calls.length).toBe(2)
+  } finally {
+    console.warn = original
+  }
 })

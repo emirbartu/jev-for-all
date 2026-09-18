@@ -42,3 +42,81 @@ test("answer guards reject malformed payloads", () => {
   expect(asNoul({ type: "noul", noul: "high" })).toBeNull()
   expect(asNoul({ type: "noul", noul: 0.7 })?.noul).toBe(0.7)
 })
+
+import { applySkillDecision, selectSkill } from "./skills"
+import type { Ask } from "./jev"
+
+function stubAsk(...responses: Array<Record<string, unknown> | Error>) {
+  const calls: unknown[] = []
+  const ask: Ask = async (input) => {
+    calls.push(input)
+    const response = responses[Math.min(calls.length - 1, responses.length - 1)]
+    if (response instanceof Error) throw response
+    return response
+  }
+  return { ask, calls }
+}
+
+const skillRoster = [
+  { id: "pptx-author", name: "pptx-author", description: "Author decks", content: "Use python-pptx" },
+  { id: "pptx-edit", name: "pptx-edit", description: "Edit decks", content: "Use the editor" },
+]
+
+const openGate = { "gate::acts": { type: "noul", noul: 0.9 }, "gate::procedure": { type: "noul", noul: 0.8 }, "gate::prose": { type: "noul", noul: 0.2 } }
+const closedGate = { "gate::acts": { type: "noul", noul: 0.1 }, "gate::procedure": { type: "noul", noul: 0.1 }, "gate::prose": { type: "noul", noul: 0.9 } }
+
+test("selectSkill returns null when the gate is closed", async () => {
+  const { ask } = stubAsk({
+    which: { type: "choice", choice: "pptx-author", probabilities: { "pptx-author": 0.9, "pptx-edit": 0.1 }, confidence: 0.9 },
+    ...closedGate,
+  })
+  expect(await selectSkill(ask, { request: "explain monads", skills: skillRoster, config: { rerank: false } })).toBeNull()
+})
+
+test("selectSkill returns the ranked winner", async () => {
+  const { ask } = stubAsk({
+    which: { type: "choice", choice: "pptx-author", probabilities: { "pptx-author": 0.8, "pptx-edit": 0.2 }, confidence: 0.9 },
+    ...openGate,
+  })
+  expect(await selectSkill(ask, { request: "build me a deck", skills: skillRoster, config: { rerank: false } })).toEqual({
+    id: "pptx-author",
+  })
+})
+
+test("selectSkill rejects a winner that is not in the roster", async () => {
+  const { ask } = stubAsk({
+    which: { type: "choice", choice: "nope", probabilities: { nope: 1 }, confidence: 1 },
+    ...openGate,
+  })
+  expect(await selectSkill(ask, { request: "build me a deck", skills: skillRoster, config: { rerank: false } })).toBeNull()
+})
+
+test("selectSkill reranks a large roster and honours the fits threshold", async () => {
+  const { ask, calls } = stubAsk(
+    {
+      which: { type: "choice", choice: "pptx-author", probabilities: { "pptx-author": 0.6, "pptx-edit": 0.4 }, confidence: 0.9 },
+      ...openGate,
+    },
+    {
+      which: { type: "choice", choice: "pptx-edit", probabilities: { "pptx-author": 0.4, "pptx-edit": 0.6 }, confidence: 0.9 },
+      "fits::pptx-author": { type: "noul", noul: 0.2 },
+      "fits::pptx-edit": { type: "noul", noul: 0.8 },
+    },
+  )
+  const decision = await selectSkill(ask, { request: "edit my deck", skills: skillRoster, config: { rerank: "auto", rerankAbove: 1 } })
+  expect(calls.length).toBe(2)
+  expect(decision).toEqual({ id: "pptx-edit" })
+})
+
+test("selectSkill fails open on transport errors", async () => {
+  const { ask } = stubAsk(new Error("boom"))
+  expect(await selectSkill(ask, { request: "anything", skills: skillRoster })).toBeNull()
+})
+
+test("applySkillDecision pushes once and dedupes", () => {
+  const prompt: { skills?: Array<{ id: string }> } = {}
+  expect(applySkillDecision(prompt, { id: "pptx-author" })).toBe(true)
+  expect(applySkillDecision(prompt, { id: "pptx-author" })).toBe(false)
+  expect(applySkillDecision(prompt, null)).toBe(false)
+  expect(prompt.skills).toEqual([{ id: "pptx-author" }])
+})

@@ -129,3 +129,79 @@ test("applySkillDecision pushes once and dedupes", () => {
   expect(applySkillDecision(prompt, null)).toBe(false)
   expect(prompt.skills).toEqual([{ id: "pptx-author" }])
 })
+
+import { applyToolDecision, renderState, routeTools } from "./tools"
+
+const toolCatalog = {
+  read: { description: "Read a file" },
+  grep: { description: "Search file contents" },
+  edit: { description: "Edit a file" },
+  browser_scrape: { description: "Load a web page" },
+  browser_click: { description: "Click a page element" },
+}
+
+test("routeTools keeps the chosen tool and the alwaysVisible floor", async () => {
+  const { ask } = stubAsk({
+    next: { type: "choice", choice: "grep", probabilities: { grep: 0.7, edit: 0.2, browser_scrape: 0.05, browser_click: 0.05 }, confidence: 0.9 },
+    needs_tool: { type: "noul", noul: 0.9 },
+  })
+  const decision = await routeTools(ask, {
+    state: "find X",
+    catalog: toolCatalog,
+    config: { maxTools: 1, alwaysVisible: ["read"] },
+  })
+  expect(decision?.tools).toEqual(["grep", "read"])
+  expect(decision?.start).toBe("grep")
+  expect(decision?.filtered).toBe(true)
+
+  const tools: Record<string, unknown> = { ...toolCatalog }
+  const system: Array<{ type: string; text: string }> = []
+  applyToolDecision(tools, system, decision!)
+  expect(Object.keys(tools).sort()).toEqual(["grep", "read"])
+  expect(system[0].text).toContain("Start with: grep")
+})
+
+test("routeTools leaves the catalog alone when no tool is needed", async () => {
+  const { ask } = stubAsk({
+    next: { type: "choice", choice: "read", probabilities: { read: 1 }, confidence: 1 },
+    needs_tool: { type: "noul", noul: 0.05 },
+  })
+  const decision = await routeTools(ask, { state: "hi", catalog: toolCatalog })
+  expect(decision?.filtered).toBe(false)
+  expect(decision?.tools.length).toBe(Object.keys(toolCatalog).length)
+  expect(decision?.hint).toContain("answer directly")
+})
+
+test("routeTools bails out on low confidence", async () => {
+  const { ask } = stubAsk({
+    next: { type: "choice", choice: "read", probabilities: { read: 0.4, edit: 0.3 }, confidence: 0.1 },
+    needs_tool: { type: "noul", noul: 0.9 },
+  })
+  expect(await routeTools(ask, { state: "hi", catalog: toolCatalog })).toBeNull()
+})
+
+test("routeTools fails open when no ranked tool is in the catalog", async () => {
+  const { ask } = stubAsk({
+    next: { type: "choice", choice: "ghost", probabilities: { ghost: 1 }, confidence: 1 },
+    needs_tool: { type: "noul", noul: 0.9 },
+  })
+  expect(await routeTools(ask, { state: "hi", catalog: toolCatalog, config: { alwaysVisible: [] } })).toBeNull()
+})
+
+test("routeTools fails open on transport errors", async () => {
+  const { ask } = stubAsk(new Error("timeout"))
+  expect(await routeTools(ask, { state: "hi", catalog: toolCatalog })).toBeNull()
+})
+
+test("renderState keeps the tail within budget", () => {
+  const rendered = renderState({
+    agent: "build",
+    messages: [
+      { role: "user", content: [{ type: "text", text: "x".repeat(1000) }] },
+      { role: "assistant", content: [{ type: "text", text: "latest instruction" }] },
+    ],
+    budget: 50,
+  })
+  expect(rendered.length).toBeLessThanOrEqual(50)
+  expect(rendered).toContain("latest instruction")
+})

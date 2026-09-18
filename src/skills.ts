@@ -59,12 +59,11 @@ export async function selectSkill(
       },
     })
 
-    const gate = (["acts", "procedure", "prose"] as const)
-      .map((key) => {
-        const value = asNoul(first[`gate::${key}`])?.noul ?? 0
-        return key === "prose" ? 1 - value : value
-      })
-      .reduce((sum, value) => sum + value, 0) / 3
+    const [acts, procedure, prose] = (["acts", "procedure", "prose"] as const).map((key) =>
+      asNoul(first[`gate::${key}`]),
+    )
+    if (!acts || !procedure || !prose) return null
+    const gate = (acts.noul + procedure.noul + (1 - prose.noul)) / 3
     if (gate < config.gateThreshold) return null
 
     const choice = asChoice(first.which)

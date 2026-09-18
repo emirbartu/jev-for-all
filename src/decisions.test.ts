@@ -113,6 +113,15 @@ test("selectSkill fails open on transport errors", async () => {
   expect(await selectSkill(ask, { request: "anything", skills: skillRoster })).toBeNull()
 })
 
+test("selectSkill fails open when gate answers are malformed", async () => {
+  const { ask } = stubAsk({
+    which: { type: "choice", choice: "pptx-author", probabilities: { "pptx-author": 0.9, "pptx-edit": 0.1 }, confidence: 0.9 },
+    "gate::acts": { type: "noul", noul: 0.9 },
+    "gate::procedure": { type: "noul", noul: "high" },
+  })
+  expect(await selectSkill(ask, { request: "build me a deck", skills: skillRoster, config: { rerank: false } })).toBeNull()
+})
+
 test("applySkillDecision pushes once and dedupes", () => {
   const prompt: { skills?: Array<{ id: string }> } = {}
   expect(applySkillDecision(prompt, { id: "pptx-author" })).toBe(true)

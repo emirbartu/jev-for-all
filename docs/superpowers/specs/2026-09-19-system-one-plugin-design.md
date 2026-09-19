@@ -215,3 +215,21 @@ pruning, OpenRouter transport (seam stays in `src/jev.ts`), V1 compat, telemetry
 - **Prompt hook is not exactly-once**: dedupe the skill push.
 - **Transport uncertainty** (OpenRouter beta): resolved by the one-line curl check;
   only `src/jev.ts` changes.
+
+## Amendment 2026-09-19: OpenRouter transport (supersedes the native TypeSafe transport)
+
+The user has Jev access through OpenRouter's alpha Decisions API only. Superseding the
+"TypeSafe / Jev API" section above:
+
+- Transport: `@openrouter/sdk` → `client.alpha.decisions.create({ decisionsRequest })`,
+  which POSTs to `https://openrouter.ai/api/alpha/decisions`. Request
+  `{ model, state, questions }`, response `{ answers, usage }` — same primitives and answer
+  shapes as the native API.
+- Default model: `~typesafe/jev-latest`. Env fallback: `OPENROUTER_API_KEY`.
+- Per-request `retries: { strategy: "none" }`: the SDK default retries 5xx with backoff for
+  up to an hour, which is unacceptable inside a per-model-step hook.
+- `serverURL` plugin option (test/proxy seam) replaces the old `fetch` injection; per-request
+  `timeoutMs` still defaults to 1000 ms.
+- `@openrouter/sdk` is now a runtime dependency; the "no new runtime dependencies" constraint
+  is superseded by this amendment.
+- Everything else stands: fail-open semantics, thresholds, cache, hooks, hint format.

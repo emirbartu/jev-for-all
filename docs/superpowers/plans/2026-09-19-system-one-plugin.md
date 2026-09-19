@@ -1147,6 +1147,361 @@ Write findings (latency observed, tool counts, any wrong routing) into the spec'
 
 ---
 
+### Task 6: OpenRouter transport via `@openrouter/sdk`
+
+**Files:**
+- Modify: `package.json`, `bun.lock`, `src/jev.ts`, `index.ts`, `src/decisions.test.ts`
+
+**Interfaces:**
+- Consumes: `Ask`, `Question`, `Answers`, `JevError`, `asChoice`, `asNoul` (keep the whole surface stable — nothing outside `src/jev.ts` changes its shape).
+- Produces:
+  - `createJev(options: { apiKey: string; model?: string; serverURL?: string; timeoutMs?: number }): Ask`
+  - `readOptions` gains `serverURL?: string` and **drops** `fetch`; `ResolvedOptions.serverURL?: string`.
+  - `setup` env fallback becomes `OPENROUTER_API_KEY` (drops `TYPESAFE_API_KEY`).
+
+**SDK facts (verified against `@openrouter/sdk@1.3.0`; use verbatim):**
+- `import { OpenRouter } from "@openrouter/sdk"`; `const client = new OpenRouter({ apiKey })`.
+- `await client.alpha.decisions.create({ decisionsRequest: { model, state, questions } }, { timeoutMs, retries: { strategy: "none" }, ...(serverURL ? { serverURL } : {}) })`.
+- The operation appends `/api/alpha/decisions` to the **per-request** `serverURL` (default `https://openrouter.ai`). Client-level `serverURL` is not reliably applied to this operation — always pass it per request.
+- Response: `{ answers, model, usage: { inputTokens, outputTokens, cost? } }`.
+- The SDK's default retry policy retries 5xx with backoff for up to 1 hour. `retries: { strategy: "none" }` is mandatory inside the hook path.
+- SDK errors: wrap every throw as `JevError`, reading `(error as { statusCode?: number }).statusCode` when present.
+- Default model: `~typesafe/jev-latest`.
+
+- [ ] **Step 1: Add the dependency**
+
+```bash
+bun add @openrouter/sdk
+```
+
+- [ ] **Step 2: Rewrite the transport tests with a local mock server**
+
+In `src/decisions.test.ts`, replace the three `createJev` tests (the ones injecting `fakeFetch`) with a `Bun.serve` mock and four tests. Add this helper near the top of the file (module scope):
+
+```ts
+type Canned = { status?: number; body: unknown; delayMs?: number }
+
+function mockJevServer(handler: (request: Request) => Canned | Promise<Canned>) {
+  const requests: Array<{ url: string; body: unknown; authorization: string | null }> = []
+  const server = Bun.serve({
+    port: 0,
+    async fetch(request) {
+      const body = await request
+        .clone()
+        .json()
+        .catch(() => undefined)
+      requests.push({ url: request.url, body, authorization: request.headers.get("authorization") })
+      const canned = await handler(request)
+      if (canned.delayMs) await new Promise((resolve) => setTimeout(resolve, canned.delayMs))
+      return new Response(JSON.stringify(canned.body), {
+        status: canned.status ?? 200,
+        headers: { "content-type": "application/json" },
+      })
+    },
+  })
+  return { server, requests, serverURL: `http://localhost:${server.port}` }
+}
+```
+
+Tests (teardown with `server.stop(true)` in `finally`):
+
+```ts
+test("createJev posts to the OpenRouter decisions endpoint", async () => {
+  const mock = mockJevServer(() => ({
+    body: {
+      answers: { which: { type: "choice", choice: "read", probabilities: { read: 1 }, confidence: 1 } },
+      model: "~typesafe/jev-latest",
+      usage: { inputTokens: 10, outputTokens: 4 },
+    },
+  }))
+  try {
+    const ask = createJev({ apiKey: "k", serverURL: mock.serverURL })
+    const answers = await ask({
+      state: { request: "hi" },
+      questions: { which: { type: "choice", instructions: "pick", criteria: { read: "read a file" } } },
+    })
+    expect(asChoice(answers.which)?.choice).toBe("read")
+    expect(mock.requests.length).toBe(1)
+    expect(new URL(mock.requests[0].url).pathname).toBe("/api/alpha/decisions")
+    expect(mock.requests[0].authorization).toBe("Bearer k")
+    expect(mock.requests[0].body).toEqual({
+      model: "~typesafe/jev-latest",
+      state: { request: "hi" },
+      questions: { which: { type: "choice", instructions: "pick", criteria: { read: "read a file" } } },
+    })
+  } finally {
+    mock.server.stop(true)
+  }
+})
+
+test("createJev throws JevError on non-2xx", async () => {
+  const mock = mockJevServer(() => ({ status: 429, body: { error: { message: "slow down" } } }))
+  try {
+    const ask = createJev({ apiKey: "k", serverURL: mock.serverURL })
+    await expect(ask({ state: {}, questions: {} })).rejects.toThrow(JevError)
+  } finally {
+    mock.server.stop(true)
+  }
+})
+
+test("createJev throws JevError on a response without answers", async () => {
+  const mock = mockJevServer(() => ({ body: { model: "x", usage: {} } }))
+  try {
+    const ask = createJev({ apiKey: "k", serverURL: mock.serverURL })
+    await expect(ask({ state: {}, questions: {} })).rejects.toThrow(JevError)
+  } finally {
+    mock.server.stop(true)
+  }
+})
+
+test("createJev honours timeoutMs", async () => {
+  const mock = mockJevServer(() => ({ body: { answers: {} }, delayMs: 200 }))
+  try {
+    const ask = createJev({ apiKey: "k", serverURL: mock.serverURL, timeoutMs: 50 })
+    await expect(ask({ state: {}, questions: {} })).rejects.toThrow()
+  } finally {
+    mock.server.stop(true)
+  }
+})
+```
+
+- [ ] **Step 3: Rewrite `src/jev.ts`**
+
+```ts
+import { OpenRouter } from "@openrouter/sdk"
+
+export interface QuestionChoice {
+  type: "choice"
+  instructions: string
+  criteria: Record<string, string>
+}
+
+export interface QuestionNoul {
+  type: "noul"
+  instructions: string
+}
+
+export type Question = QuestionChoice | QuestionNoul
+
+export type Answers = Record<string, unknown>
+
+export type Ask = (input: { state: unknown; questions: Record<string, Question> }) => Promise<Answers>
+
+export interface JevOptions {
+  apiKey: string
+  model?: string
+  serverURL?: string
+  timeoutMs?: number
+}
+
+export class JevError extends Error {
+  readonly status?: number
+
+  constructor(message: string, status?: number) {
+    super(message)
+    this.name = "JevError"
+    this.status = status
+  }
+}
+
+export function createJev(options: JevOptions): Ask {
+  const model = options.model ?? "~typesafe/jev-latest"
+  const client = new OpenRouter({ apiKey: options.apiKey })
+
+  return async ({ state, questions }) => {
+    let response: Awaited<ReturnType<typeof client.alpha.decisions.create>>
+    try {
+      response = await client.alpha.decisions.create(
+        { decisionsRequest: { model, state, questions } },
+        {
+          timeoutMs: options.timeoutMs ?? 1000,
+          retries: { strategy: "none" },
+          ...(options.serverURL ? { serverURL: options.serverURL } : {}),
+        },
+      )
+    } catch (error) {
+      const status = (error as { statusCode?: number }).statusCode
+      throw new JevError(
+        `system-one request failed: ${error instanceof Error ? error.message : String(error)}`,
+        typeof status === "number" ? status : undefined,
+      )
+    }
+    const answers = response?.answers
+    if (!answers || typeof answers !== "object") throw new JevError("system-one response missing answers")
+    return answers as Answers
+  }
+}
+
+export interface ChoiceAnswer {
+  choice: string
+  probabilities: Record<string, number>
+  confidence?: number
+}
+
+export interface NoulAnswer {
+  noul: number
+}
+
+export function asChoice(value: unknown): ChoiceAnswer | null {
+  if (!value || typeof value !== "object") return null
+  const candidate = value as { type?: unknown; choice?: unknown; probabilities?: unknown; confidence?: unknown }
+  if (candidate.type !== "choice" || typeof candidate.choice !== "string") return null
+  const probabilities: Record<string, number> = {}
+  if (candidate.probabilities && typeof candidate.probabilities === "object") {
+    for (const [key, probability] of Object.entries(candidate.probabilities as Record<string, unknown>)) {
+      if (typeof probability === "number" && Number.isFinite(probability)) probabilities[key] = probability
+    }
+  }
+  return {
+    choice: candidate.choice,
+    probabilities,
+    confidence: typeof candidate.confidence === "number" ? candidate.confidence : undefined,
+  }
+}
+
+export function asNoul(value: unknown): NoulAnswer | null {
+  if (!value || typeof value !== "object") return null
+  const candidate = value as { type?: unknown; noul?: unknown }
+  if (candidate.type !== "noul" || typeof candidate.noul !== "number" || !Number.isFinite(candidate.noul)) return null
+  return { noul: candidate.noul }
+}
+```
+
+If TypeScript rejects passing our `Question` type to `decisionsRequest.questions` (the SDK's criteria accepts `string | object | array | null`, so `Record<string, string>` is assignable), cast that one property (`questions: questions as never`) rather than loosening the exported types.
+
+- [ ] **Step 4: Update `index.ts`**
+
+- In `ResolvedOptions`, replace `fetch?: typeof fetch` with `serverURL?: string`.
+- In `readOptions`, replace the `fetch` parse with `serverURL: typeof raw.serverURL === "string" ? raw.serverURL : undefined`.
+- In `setup`, change the key line to `const apiKey = options.apiKey ?? process.env.OPENROUTER_API_KEY` and update both warning texts to mention `OPENROUTER_API_KEY`.
+- Pass `serverURL: options.serverURL` into `createJev`.
+- Leave the hooks, cache, `askFor`, `warnOnce`, and cleanup untouched.
+
+- [ ] **Step 5: Adapt the two end-to-end hook tests**
+
+The prompt-hook and context-hook tests currently pass `options.fetch: fakeFetch`. Replace that with a `mockJevServer` (Step 2 helper) whose handler returns the canned answers those tests already assert, and pass `options.serverURL: mock.serverURL`. Keep every existing assertion and add `server.stop(true)` teardown.
+
+- [ ] **Step 6: Verify and commit**
+
+```bash
+bun test
+bun run typecheck
+```
+
+Expected: all tests pass (was 25; the transport tests change count — report the actual number), typecheck clean. The tests must not touch the network (all mock servers are local).
+
+```bash
+git add package.json bun.lock src/jev.ts index.ts src/decisions.test.ts
+git commit -m "feat: route Jev through the OpenRouter alpha decisions API"
+```
+
+---
+
+### Task 7: Live probe script
+
+**Files:**
+- Create: `scripts/jev-probe.ts`
+
+**Interfaces:**
+- Consumes: `createJev` from `../src/jev`.
+- Produces: a runnable live probe; not part of the published plugin (`package.json` `files` stays `["index.ts", "src"]`).
+
+- [ ] **Step 1: Write the probe**
+
+```ts
+// Live Jev probe. Requires a working OpenRouter key.
+//
+//   OPENROUTER_API_KEY=... bun scripts/jev-probe.ts decisions
+//   OPENROUTER_API_KEY=... bun scripts/jev-probe.ts catalog tools.json [task]
+//
+// `tools.json` maps tool names to { description }, e.g.
+//   { "read": { "description": "Read a file" }, "grep": { "description": "Search files" } }
+import { createJev } from "../src/jev"
+
+const apiKey = process.env.OPENROUTER_API_KEY
+if (!apiKey) {
+  console.error("set OPENROUTER_API_KEY")
+  process.exit(1)
+}
+
+const mode = process.argv[2] ?? "decisions"
+const ask = createJev({ apiKey, timeoutMs: Number(process.env.JEV_TIMEOUT_MS ?? 5000) })
+const started = performance.now()
+
+if (mode === "decisions") {
+  const answers = await ask({
+    state: "Help! My payouts have been failing for 3 days.",
+    questions: {
+      is_urgent: { type: "noul", instructions: "Does this message convey urgency?" },
+      department: {
+        type: "choice",
+        instructions: "Which team should handle this?",
+        criteria: {
+          billing: "Payments, invoicing, refunds",
+          technical: "Bugs, outages, integrations",
+          sales: "Pricing, upgrades, new accounts",
+        },
+      },
+    },
+  })
+  console.log(JSON.stringify(answers, null, 2))
+} else if (mode === "catalog") {
+  const path = process.argv[3]
+  if (!path) {
+    console.error("usage: jev-probe catalog <tools.json> [task]")
+    process.exit(1)
+  }
+  const catalog = JSON.parse(await Bun.file(path).text()) as Record<string, { description?: string }>
+  const names = Object.keys(catalog)
+  const task = process.argv[4] ?? "make progress on the user's request"
+  const answers = await ask({
+    state: JSON.stringify({ task, tools: names }),
+    questions: {
+      next: {
+        type: "choice",
+        instructions: "Which single tool is the best next step?",
+        criteria: Object.fromEntries(
+          names.map((name) => [name, (catalog[name]?.description ?? "").slice(0, 300) || name]),
+        ),
+      },
+      needs_tool: { type: "noul", instructions: "Does making progress require calling a tool?" },
+    },
+  })
+  const next = (answers.next ?? {}) as { choice?: string; probabilities?: Record<string, number>; confidence?: number }
+  const ranked = Object.entries(next.probabilities ?? {}).sort((a, b) => b[1] - a[1])
+  const chars = (picked: string[]) =>
+    picked.reduce((sum, name) => sum + name.length + (catalog[name]?.description ?? "").length, 0)
+  console.log(
+    JSON.stringify(
+      {
+        next: next.choice,
+        confidence: next.confidence,
+        needsTool: answers.needs_tool,
+        ranked: ranked.slice(0, 8),
+        estimatedTokens: { fullCatalog: Math.round(chars(names) / 4), top8: Math.round(chars(ranked.slice(0, 8).map(([name]) => name)) / 4) },
+      },
+      null,
+      2,
+    ),
+  )
+} else {
+  console.error(`unknown mode: ${mode}`)
+  process.exit(1)
+}
+
+console.log(`latency: ${Math.round(performance.now() - started)}ms`)
+```
+
+- [ ] **Step 2: Typecheck and commit**
+
+```bash
+bun run typecheck
+git add scripts/jev-probe.ts
+git commit -m "chore: add live Jev probe script"
+```
+
+---
+
 ## Plan Self-Review
 
 - **Spec coverage:** transport (`src/jev.ts`) → Tasks 1/5; skill selection + native `prompt.skills` → Task 2 and Task 4 wiring; tool routing + floor + hint + fail-open → Tasks 3/4; cache → Task 4; options → Task 4; offline smoke → Task 4 tests; live verification → Task 5. The spec's "no recovery for hidden tools" escape hatch is the hint line, implemented in Task 3.

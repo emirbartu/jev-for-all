@@ -1,39 +1,85 @@
 import { expect, test } from "bun:test"
 import { JevError, asChoice, asNoul, createJev } from "./jev"
 
-test("createJev posts state and questions and returns answers", async () => {
-  const calls: Array<{ url: string; body: unknown }> = []
-  const fakeFetch = (async (input: string | URL | Request, init?: RequestInit) => {
-    calls.push({ url: String(input), body: JSON.parse(String(init?.body)) })
-    return new Response(
-      JSON.stringify({
-        answers: { which: { type: "choice", choice: "read", probabilities: { read: 1 }, confidence: 1 } },
-      }),
-      { status: 200 },
-    )
-  }) as typeof fetch
-  const ask = createJev({ apiKey: "k", fetch: fakeFetch })
-  const answers = await ask({
-    state: { request: "hi" },
-    questions: { which: { type: "choice", instructions: "pick", criteria: { read: "read a file" } } },
-  })
+type Canned = { status?: number; body: unknown; delayMs?: number }
 
-  expect(calls.length).toBe(1)
-  expect(calls[0].url).toBe("https://api.typesafe.ai/v1/systemone")
-  expect(calls[0].body).toEqual({
-    state: { request: "hi" },
-    model: "jev-latest",
-    questions: { which: { type: "choice", instructions: "pick", criteria: { read: "read a file" } } },
+function mockJevServer(handler: (request: Request) => Canned | Promise<Canned>) {
+  const requests: Array<{ url: string; body: unknown; authorization: string | null }> = []
+  const server = Bun.serve({
+    port: 0,
+    async fetch(request) {
+      const body = await request
+        .clone()
+        .json()
+        .catch(() => undefined)
+      requests.push({ url: request.url, body, authorization: request.headers.get("authorization") })
+      const canned = await handler(request)
+      if (canned.delayMs) await new Promise((resolve) => setTimeout(resolve, canned.delayMs))
+      return new Response(JSON.stringify(canned.body), {
+        status: canned.status ?? 200,
+        headers: { "content-type": "application/json" },
+      })
+    },
   })
-  expect(asChoice(answers.which)?.choice).toBe("read")
+  return { server, requests, serverURL: `http://localhost:${server.port}` }
+}
+
+test("createJev posts to the OpenRouter decisions endpoint", async () => {
+  const mock = mockJevServer(() => ({
+    body: {
+      answers: { which: { type: "choice", choice: "read", probabilities: { read: 1 }, confidence: 1 } },
+      model: "~typesafe/jev-latest",
+      usage: { input_tokens: 10, output_tokens: 4 },
+    },
+  }))
+  try {
+    const ask = createJev({ apiKey: "k", serverURL: mock.serverURL })
+    const answers = await ask({
+      state: { request: "hi" },
+      questions: { which: { type: "choice", instructions: "pick", criteria: { read: "read a file" } } },
+    })
+    expect(asChoice(answers.which)?.choice).toBe("read")
+    expect(mock.requests.length).toBe(1)
+    expect(new URL(mock.requests[0].url).pathname).toBe("/api/alpha/decisions")
+    expect(mock.requests[0].authorization).toBe("Bearer k")
+    expect(mock.requests[0].body).toEqual({
+      model: "~typesafe/jev-latest",
+      state: { request: "hi" },
+      questions: { which: { type: "choice", instructions: "pick", criteria: { read: "read a file" } } },
+    })
+  } finally {
+    mock.server.stop(true)
+  }
 })
 
 test("createJev throws JevError on non-2xx", async () => {
-  const ask = createJev({
-    apiKey: "k",
-    fetch: (async () => new Response("nope", { status: 429 })) as unknown as typeof fetch,
-  })
-  await expect(ask({ state: {}, questions: {} })).rejects.toThrow(JevError)
+  const mock = mockJevServer(() => ({ status: 429, body: { error: { message: "slow down" } } }))
+  try {
+    const ask = createJev({ apiKey: "k", serverURL: mock.serverURL })
+    await expect(ask({ state: {}, questions: {} })).rejects.toThrow(JevError)
+  } finally {
+    mock.server.stop(true)
+  }
+})
+
+test("createJev throws JevError on a response without answers", async () => {
+  const mock = mockJevServer(() => ({ body: { model: "x", usage: {} } }))
+  try {
+    const ask = createJev({ apiKey: "k", serverURL: mock.serverURL })
+    await expect(ask({ state: {}, questions: {} })).rejects.toThrow(JevError)
+  } finally {
+    mock.server.stop(true)
+  }
+})
+
+test("createJev honours timeoutMs", async () => {
+  const mock = mockJevServer(() => ({ body: { answers: {} }, delayMs: 200 }))
+  try {
+    const ask = createJev({ apiKey: "k", serverURL: mock.serverURL, timeoutMs: 50 })
+    await expect(ask({ state: {}, questions: {} })).rejects.toThrow()
+  } finally {
+    mock.server.stop(true)
+  }
 })
 
 test("answer guards reject malformed payloads", () => {
@@ -250,8 +296,8 @@ test("readOptions applies defaults and accepts overrides", () => {
 })
 
 test("setup is inert without an API key", async () => {
-  const saved = process.env.TYPESAFE_API_KEY
-  delete process.env.TYPESAFE_API_KEY
+  const saved = process.env.OPENROUTER_API_KEY
+  delete process.env.OPENROUTER_API_KEY
   try {
     const plugin = (await import("../index")).default
     let hooked = false
@@ -268,7 +314,7 @@ test("setup is inert without an API key", async () => {
     expect(hooked).toBe(false)
     expect(cleanup).toBeUndefined()
   } finally {
-    if (saved !== undefined) process.env.TYPESAFE_API_KEY = saved
+    if (saved !== undefined) process.env.OPENROUTER_API_KEY = saved
   }
 })
 
@@ -322,71 +368,79 @@ test("readOptions warns on invalid values and falls back", () => {
 })
 
 test("prompt hook routes skills end to end", async () => {
-  const fakeFetch = (async () =>
-    new Response(
-      JSON.stringify({
-        answers: {
-          which: { type: "choice", choice: "pptx-author", probabilities: { "pptx-author": 0.9 }, confidence: 0.9 },
-          "gate::acts": { type: "noul", noul: 0.9 },
-          "gate::procedure": { type: "noul", noul: 0.8 },
-          "gate::prose": { type: "noul", noul: 0.2 },
-        },
-      }),
-      { status: 200 },
-    )) as unknown as typeof fetch
-  let promptHook: ((event: unknown) => Promise<void> | void) | undefined
-  const plugin = (await import("../index")).default
-  await plugin.setup({
-    options: { apiKey: "test", fetch: fakeFetch },
-    skill: {
-      list: async () => ({
-        data: [{ id: "pptx-author", name: "pptx-author", description: "Author decks", content: "Use python-pptx" }],
-      }),
-    },
-    session: {
-      hook: (name: string, callback: (event: unknown) => Promise<void> | void) => {
-        if (name === "prompt") promptHook = callback
-        return Promise.resolve({ dispose: async () => {} })
+  const mock = mockJevServer(() => ({
+    body: {
+      answers: {
+        which: { type: "choice", choice: "pptx-author", probabilities: { "pptx-author": 0.9 }, confidence: 0.9 },
+        "gate::acts": { type: "noul", noul: 0.9 },
+        "gate::procedure": { type: "noul", noul: 0.8 },
+        "gate::prose": { type: "noul", noul: 0.2 },
       },
+      model: "~typesafe/jev-latest",
+      usage: { input_tokens: 1, output_tokens: 1 },
     },
-  } as never)
+  }))
+  try {
+    let promptHook: ((event: unknown) => Promise<void> | void) | undefined
+    const plugin = (await import("../index")).default
+    await plugin.setup({
+      options: { apiKey: "test", serverURL: mock.serverURL },
+      skill: {
+        list: async () => ({
+          data: [{ id: "pptx-author", name: "pptx-author", description: "Author decks", content: "Use python-pptx" }],
+        }),
+      },
+      session: {
+        hook: (name: string, callback: (event: unknown) => Promise<void> | void) => {
+          if (name === "prompt") promptHook = callback
+          return Promise.resolve({ dispose: async () => {} })
+        },
+      },
+    } as never)
 
-  const prompt: { text: string; skills?: Array<{ id: string }> } = { text: "build me a deck" }
-  await promptHook!({ sessionID: "s1", prompt })
-  expect(prompt.skills).toEqual([{ id: "pptx-author" }])
+    const prompt: { text: string; skills?: Array<{ id: string }> } = { text: "build me a deck" }
+    await promptHook!({ sessionID: "s1", prompt })
+    expect(prompt.skills).toEqual([{ id: "pptx-author" }])
+  } finally {
+    mock.server.stop(true)
+  }
 })
 
 test("context hook routes tools end to end", async () => {
-  const fakeFetch = (async () =>
-    new Response(
-      JSON.stringify({
-        answers: {
-          next: { type: "choice", choice: "grep", probabilities: { grep: 0.7, edit: 0.2 }, confidence: 0.9 },
-          needs_tool: { type: "noul", noul: 0.9 },
-        },
-      }),
-      { status: 200 },
-    )) as unknown as typeof fetch
-  let contextHook: ((event: unknown) => Promise<void> | void) | undefined
-  const plugin = (await import("../index")).default
-  await plugin.setup({
-    options: { apiKey: "test", fetch: fakeFetch },
-    session: {
-      hook: (name: string, callback: (event: unknown) => Promise<void> | void) => {
-        if (name === "context") contextHook = callback
-        return Promise.resolve({ dispose: async () => {} })
+  const mock = mockJevServer(() => ({
+    body: {
+      answers: {
+        next: { type: "choice", choice: "grep", probabilities: { grep: 0.7, edit: 0.2 }, confidence: 0.9 },
+        needs_tool: { type: "noul", noul: 0.9 },
       },
+      model: "~typesafe/jev-latest",
+      usage: { input_tokens: 1, output_tokens: 1 },
     },
-  } as never)
+  }))
+  try {
+    let contextHook: ((event: unknown) => Promise<void> | void) | undefined
+    const plugin = (await import("../index")).default
+    await plugin.setup({
+      options: { apiKey: "test", serverURL: mock.serverURL },
+      session: {
+        hook: (name: string, callback: (event: unknown) => Promise<void> | void) => {
+          if (name === "context") contextHook = callback
+          return Promise.resolve({ dispose: async () => {} })
+        },
+      },
+    } as never)
 
-  const tools: Record<string, unknown> = {
-    read: { description: "Read" },
-    grep: { description: "Search" },
-    edit: { description: "Edit" },
-    browser: { description: "Browse" },
+    const tools: Record<string, unknown> = {
+      read: { description: "Read" },
+      grep: { description: "Search" },
+      edit: { description: "Edit" },
+      browser: { description: "Browse" },
+    }
+    const system: Array<{ type: string; text: string }> = []
+    await contextHook!({ sessionID: "s1", agent: "build", messages: [], tools, system })
+    expect(Object.keys(tools).sort()).toEqual(["edit", "grep", "read"])
+    expect(system[0].text).toContain("Start with: grep")
+  } finally {
+    mock.server.stop(true)
   }
-  const system: Array<{ type: string; text: string }> = []
-  await contextHook!({ sessionID: "s1", agent: "build", messages: [], tools, system })
-  expect(Object.keys(tools).sort()).toEqual(["edit", "grep", "read"])
-  expect(system[0].text).toContain("Start with: grep")
 })

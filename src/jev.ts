@@ -1,3 +1,5 @@
+import { OpenRouter } from "@openrouter/sdk"
+
 export interface QuestionChoice {
   type: "choice"
   instructions: string
@@ -18,9 +20,8 @@ export type Ask = (input: { state: unknown; questions: Record<string, Question> 
 export interface JevOptions {
   apiKey: string
   model?: string
-  baseURL?: string
+  serverURL?: string
   timeoutMs?: number
-  fetch?: typeof fetch
 }
 
 export class JevError extends Error {
@@ -34,34 +35,28 @@ export class JevError extends Error {
 }
 
 export function createJev(options: JevOptions): Ask {
-  const model = options.model ?? "jev-latest"
-  const baseURL = (options.baseURL ?? "https://api.typesafe.ai").replace(/\/$/, "")
-  const timeoutMs = options.timeoutMs ?? 1000
-  const doFetch = options.fetch ?? fetch
+  const model = options.model ?? "~typesafe/jev-latest"
+  const client = new OpenRouter({ apiKey: options.apiKey })
 
   return async ({ state, questions }) => {
-    let response: Response
+    let response: Awaited<ReturnType<typeof client.alpha.decisions.create>>
     try {
-      response = await doFetch(`${baseURL}/v1/systemone`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${options.apiKey}`,
+      response = await client.alpha.decisions.create(
+        { decisionsRequest: { model, state: state as never, questions } },
+        {
+          timeoutMs: options.timeoutMs ?? 1000,
+          retries: { strategy: "none" },
+          ...(options.serverURL ? { serverURL: options.serverURL } : {}),
         },
-        body: JSON.stringify({ state, model, questions }),
-        signal: AbortSignal.timeout(timeoutMs),
-      })
+      )
     } catch (error) {
-      throw new JevError(`system-one request failed: ${error instanceof Error ? error.message : String(error)}`)
+      const status = (error as { statusCode?: number }).statusCode
+      throw new JevError(
+        `system-one request failed: ${error instanceof Error ? error.message : String(error)}`,
+        typeof status === "number" ? status : undefined,
+      )
     }
-    if (!response.ok) throw new JevError(`system-one request failed: ${response.status}`, response.status)
-    let body: unknown
-    try {
-      body = await response.json()
-    } catch {
-      throw new JevError("system-one returned invalid JSON")
-    }
-    const answers = (body as { answers?: unknown } | null)?.answers
+    const answers = response?.answers
     if (!answers || typeof answers !== "object") throw new JevError("system-one response missing answers")
     return answers as Answers
   }

@@ -23,7 +23,7 @@ export interface ResolvedOptions {
   model: string
   timeoutMs: number
   debug: boolean
-  fetch?: typeof fetch
+  serverURL?: string
   agents?: string[]
   skills: ResolvedSkills
   tools: ResolvedTools
@@ -65,7 +65,7 @@ export function readOptions(raw: Record<string, unknown>): ResolvedOptions {
     model: typeof raw.model === "string" ? raw.model : "jev-latest",
     timeoutMs: number("timeoutMs", raw.timeoutMs, 1000),
     debug: bool("debug", raw.debug, false),
-    fetch: typeof raw.fetch === "function" ? (raw.fetch as typeof fetch) : undefined,
+    serverURL: typeof raw.serverURL === "string" ? raw.serverURL : undefined,
     agents: agents.length > 0 ? agents : undefined,
     skills: {
       enabled: bool("skills.enabled", skills.enabled, true),
@@ -148,13 +148,13 @@ export default Plugin.define({
   id: "system-one",
   async setup(ctx) {
     const options = readOptions((ctx.options ?? {}) as Record<string, unknown>)
-    const apiKey = options.apiKey ?? process.env.TYPESAFE_API_KEY
+    const apiKey = options.apiKey ?? process.env.OPENROUTER_API_KEY
     if (!apiKey) {
-      console.warn("[system-one] disabled: set options.apiKey or TYPESAFE_API_KEY")
+      console.warn("[system-one] disabled: set options.apiKey or OPENROUTER_API_KEY")
       return
     }
 
-    const ask = createJev({ apiKey, model: options.model, timeoutMs: options.timeoutMs, fetch: options.fetch })
+    const ask = createJev({ apiKey, model: options.model, timeoutMs: options.timeoutMs, serverURL: options.serverURL })
     const skillCache = createCache<{ id: string } | null>()
     const toolCache = createCache<ToolDecision | null>()
     const log = (...args: unknown[]) => {

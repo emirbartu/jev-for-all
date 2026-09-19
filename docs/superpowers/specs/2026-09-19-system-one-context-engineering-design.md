@@ -346,3 +346,40 @@ enabled only after its eval shows no regression.
 2. `bun run typecheck`.
 3. `scripts/probe.ts` output committed as findings (raw dumps not committed).
 4. `scripts/eval.ts` before/after table recorded in the PR for each phase that claims savings.
+
+## Phase 1 baseline (2026-09-19)
+
+Headless eval (`scripts/eval.ts`, fixture `scripts/eval-fixtures/basic/facts.txt`), one run per
+mode over both tasks, usage read from the plugin's own `observe.file` JSONL.
+
+Model: `opencode-go/deepseek-v4.1-flash` (`EVAL_MODEL`; the configured default model was
+unavailable in this environment).
+
+```text
+label     msgs  input  output  reason  cacheRead  cacheWrite  cost
+baseline  5     25097  232     121     31488      0           0.0041
+routed    6     45120  303     175     24576      0           0.0071
+```
+
+- Tasks:
+  - `read-lines` — "Read facts.txt and reply with the exact number of lines it contains."
+  - `fix-typo` — "Fix the typo colur in facts.txt to color using the edit tool."
+- `baseline` = plugin loaded with `skills.enabled=false`, `tools.enabled=false`; `routed` = plugin
+  defaults (skill and tool routing enabled). Both modes have `msgs > 0`.
+- Effective input (`input + cacheRead`): baseline `56585`, routed `69696` (~23% worse). Routed is
+  worse on this baseline; recorded as-is, with no tuning applied.
+- **Phase 1 success criteria are set from this baseline.**
+
+Caveats (both should be addressed before later-phase comparisons are trusted):
+
+1. Environment: this machine's global `~/.config/opencode/opencode.jsonc` also lists this repo as
+   a plugin, so `opencode run` loads the plugin twice — once with global default options (routing
+   enabled) and once with the scratch project options. The `baseline` arm therefore still has a
+   routing-enabled instance active, so it is not a pure routing-off control. Running the same
+   script with an isolated global config (`XDG_CONFIG_HOME=<clean dir>`, one plugin load) gives
+   baseline `22582 / 368 / 120 / 39296` and routed `32930 / 165 / 53 / 14592`
+   (input / output / reason / cacheRead).
+2. Variance: the two environments disagree on direction (default run: routed effective input ~23%
+   worse; isolated run: routed ~23% better), and per-task message counts vary (baseline 2–3,
+   routed 3–5). One run per mode over two trivial tasks cannot set a stable success threshold;
+   repeated runs are needed before Phase 2+ regressions can be judged.

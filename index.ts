@@ -1,6 +1,7 @@
 import { Plugin } from "@opencode/plugin"
 import { createJev, type Ask } from "./src/jev"
 import { applySkillDecision, defaultSkillRouting, selectSkill, type SkillRoutingConfig } from "./src/skills"
+import { createRecorder, summarize, type UsageSample } from "./src/observe"
 import {
   applyToolDecision,
   defaultToolRouting,
@@ -18,6 +19,12 @@ export interface ResolvedTools extends ToolRoutingConfig {
   enabled: boolean
 }
 
+export interface ResolvedObserve {
+  enabled: boolean
+  file?: string
+  retain: number
+}
+
 export interface ResolvedOptions {
   apiKey?: string
   model: string
@@ -27,6 +34,7 @@ export interface ResolvedOptions {
   agents?: string[]
   skills: ResolvedSkills
   tools: ResolvedTools
+  observe: ResolvedObserve
 }
 
 export function readOptions(raw: Record<string, unknown>): ResolvedOptions {
@@ -59,6 +67,7 @@ export function readOptions(raw: Record<string, unknown>): ResolvedOptions {
     return defaultSkillRouting.rerank
   }
   const agents = strings("agents", raw.agents, [])
+  const observe = (raw.observe ?? {}) as Record<string, unknown>
 
   return {
     apiKey: typeof raw.apiKey === "string" ? raw.apiKey : undefined,
@@ -93,6 +102,11 @@ export function readOptions(raw: Record<string, unknown>): ResolvedOptions {
       minConfidence: number("tools.minConfidence", tools.minConfidence, defaultToolRouting.minConfidence),
       alwaysVisible: strings("tools.alwaysVisible", tools.alwaysVisible, defaultToolRouting.alwaysVisible),
       stateBudget: number("tools.stateBudget", tools.stateBudget, defaultToolRouting.stateBudget),
+    },
+    observe: {
+      enabled: bool("observe.enabled", observe.enabled, false),
+      file: typeof observe.file === "string" ? observe.file : undefined,
+      retain: number("observe.retain", observe.retain, 20),
     },
   }
 }
@@ -149,12 +163,17 @@ export default Plugin.define({
   async setup(ctx) {
     const options = readOptions((ctx.options ?? {}) as Record<string, unknown>)
     const apiKey = options.apiKey ?? process.env.OPENROUTER_API_KEY
+    const routing = options.skills.enabled || options.tools.enabled
     if (!apiKey) {
-      console.warn("[system-one] disabled: set options.apiKey or OPENROUTER_API_KEY")
-      return
+      if (routing) {
+        console.warn("[system-one] disabled: set options.apiKey or OPENROUTER_API_KEY")
+        return
+      }
+      if (!options.observe.enabled) return
     }
-
-    const ask = createJev({ apiKey, model: options.model, timeoutMs: options.timeoutMs, serverURL: options.serverURL })
+    const ask = apiKey
+      ? createJev({ apiKey, model: options.model, timeoutMs: options.timeoutMs, serverURL: options.serverURL })
+      : undefined
     const skillCache = createCache<{ id: string } | null>()
     const toolCache = createCache<ToolDecision | null>()
     const log = (...args: unknown[]) => {
@@ -162,6 +181,7 @@ export default Plugin.define({
     }
     const warnOnce = createWarnOnce()
     const askFor = (sessionID: string): Ask => async (input) => {
+      if (!ask) throw new Error("system-one: no API key configured")
       try {
         return await ask(input)
       } catch (error) {
@@ -171,9 +191,46 @@ export default Plugin.define({
     }
     const agentEnabled = (agent: string) => !options.agents || options.agents.includes(agent)
 
+    const recorder = createRecorder({ file: options.observe.file, maxSessions: options.observe.retain })
+    const observeAbort = new AbortController()
+
+    if (options.observe.enabled) {
+      void (async () => {
+        try {
+          for await (const event of ctx.event.subscribe({ signal: observeAbort.signal })) {
+            if (
+              event.type !== "session.idle" &&
+              event.type !== "session.execution.succeeded" &&
+              event.type !== "session.execution.failed" &&
+              event.type !== "session.execution.interrupted"
+            ) {
+              continue
+            }
+            const sessionID = event.data.sessionID
+            try {
+              const messages = await ctx.session.context({ sessionID })
+              const samples = recorder.take(sessionID, messages)
+              if (samples.length === 0) continue
+              recorder.flush(samples)
+              const key = `observe/usage/${sessionID}`
+              const previous = ((await ctx.storage.get(key)) as UsageSample[] | undefined) ?? []
+              const stored = [...previous, ...samples].slice(-500) as unknown as Parameters<typeof ctx.storage.set>[1]
+              await ctx.storage.set(key, stored)
+              log("usage", summarize(samples))
+            } catch (error) {
+              warnOnce(sessionID, "usage recording failed", error)
+            }
+          }
+        } catch {
+          // subscription ended
+        }
+      })()
+    }
+
     const registrations = [
       await ctx.session.hook("prompt", async (event) => {
         if (!options.skills.enabled) return
+        if (!ask) return
         try {
           const skills = (await ctx.skill.list()).data
           const key = `skills:${event.sessionID}:${hashKey(event.prompt.text + "|" + skills.map((skill) => skill.id).join(","))}`
@@ -194,6 +251,7 @@ export default Plugin.define({
       }),
       await ctx.session.hook("context", async (event) => {
         if (!options.tools.enabled || !agentEnabled(event.agent)) return
+        if (!ask) return
         try {
           const state = renderState({ agent: event.agent, messages: event.messages, budget: options.tools.stateBudget })
           const catalog = Object.fromEntries(
@@ -214,6 +272,7 @@ export default Plugin.define({
     ]
 
     return async () => {
+      observeAbort.abort()
       await Promise.allSettled(registrations.map((registration) => registration.dispose()))
     }
   },

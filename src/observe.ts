@@ -1,3 +1,6 @@
+import { appendFileSync, mkdirSync } from "node:fs"
+import { dirname } from "node:path"
+
 export interface UsageSample {
   sessionID: string
   messageID: string
@@ -141,4 +144,44 @@ export function parseSamples(jsonl: string): UsageSample[] {
     })
   }
   return samples
+}
+
+export interface RecorderOptions {
+  file?: string
+  maxSessions?: number
+}
+
+export interface Recorder {
+  take(sessionID: string, messages: readonly unknown[]): UsageSample[]
+  flush(samples: readonly UsageSample[]): void
+}
+
+export function createRecorder(options: RecorderOptions = {}): Recorder {
+  const maxSessions = options.maxSessions ?? 20
+  const seen = new Map<string, Set<string>>()
+
+  return {
+    take(sessionID, messages) {
+      const already = seen.get(sessionID) ?? new Set<string>()
+      const samples = usageFromMessages(sessionID, messages, already)
+      for (const sample of samples) already.add(sample.messageID)
+      seen.delete(sessionID)
+      seen.set(sessionID, already)
+      while (seen.size > maxSessions) {
+        const oldest = seen.keys().next().value
+        if (oldest === undefined) break
+        seen.delete(oldest)
+      }
+      return samples
+    },
+    flush(samples) {
+      if (!options.file || samples.length === 0) return
+      try {
+        mkdirSync(dirname(options.file), { recursive: true })
+        appendFileSync(options.file, samples.map((sample) => JSON.stringify({ kind: "usage", ...sample })).join("\n") + "\n")
+      } catch {
+        // recording must never break the session
+      }
+    },
+  }
 }

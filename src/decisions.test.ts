@@ -530,3 +530,29 @@ test("parseSamples reads usage lines and ignores other kinds", () => {
   ].join("\n")
   expect(parseSamples(jsonl).length).toBe(1)
 })
+
+import { createRecorder } from "./observe"
+import { readFileSync, rmSync } from "node:fs"
+
+test("createRecorder dedupes by message and writes usage JSONL", () => {
+  const file = `/tmp/opencode-test-${Date.now()}-${Math.random().toString(36).slice(2)}.jsonl`
+  const recorder = createRecorder({ file })
+  recorder.flush(recorder.take("ses_1", [assistantMessage]))
+  expect(recorder.take("ses_1", [assistantMessage]).length).toBe(0)
+  recorder.flush(
+    recorder.take("ses_1", [{ id: "msg_9", type: "assistant", tokens: { input: 5, output: 1 } }]),
+  )
+
+  const written = parseSamples(readFileSync(file, "utf8"))
+  expect(written.length).toBe(2)
+  expect(written[1].messageID).toBe("msg_9")
+  rmSync(file, { force: true })
+})
+
+test("readOptions parses observe options", () => {
+  const defaults = readOptions({})
+  expect(defaults.observe).toEqual({ enabled: false, file: undefined, retain: 20 })
+
+  const custom = readOptions({ observe: { enabled: true, file: "/tmp/u.jsonl", retain: 3 } })
+  expect(custom.observe).toEqual({ enabled: true, file: "/tmp/u.jsonl", retain: 3 })
+})

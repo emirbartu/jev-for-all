@@ -275,7 +275,7 @@ test("hashKey is stable and distinct", () => {
 
 test("readOptions applies defaults and accepts overrides", () => {
   const defaults = readOptions({})
-  expect(defaults.model).toBe("jev-latest")
+  expect(defaults.model).toBe("~typesafe/jev-latest")
   expect(defaults.timeoutMs).toBe(1000)
   expect(defaults.tools.alwaysVisible).toContain("read")
   expect(defaults.skills.rerank).toBe("auto")

@@ -62,7 +62,7 @@ export function readOptions(raw: Record<string, unknown>): ResolvedOptions {
 
   return {
     apiKey: typeof raw.apiKey === "string" ? raw.apiKey : undefined,
-    model: typeof raw.model === "string" ? raw.model : "jev-latest",
+    model: typeof raw.model === "string" ? raw.model : "~typesafe/jev-latest",
     timeoutMs: number("timeoutMs", raw.timeoutMs, 1000),
     debug: bool("debug", raw.debug, false),
     serverURL: typeof raw.serverURL === "string" ? raw.serverURL : undefined,

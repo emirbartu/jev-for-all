@@ -350,15 +350,18 @@ enabled only after its eval shows no regression.
 ## Phase 1 baseline (2026-09-19)
 
 Headless eval (`scripts/eval.ts`, fixture `scripts/eval-fixtures/basic/facts.txt`), one run per
-mode over both tasks, usage read from the plugin's own `observe.file` JSONL.
+mode over both tasks, usage read from the plugin's own `observe.file` JSONL. The script
+config-isolates every run: each spawn gets its own empty `XDG_CONFIG_HOME` scratch directory
+(`<run>/<mode>/config`) so exactly one plugin instance loads (the scratch project's), while
+`XDG_DATA_HOME` is left untouched because provider auth lives there.
 
 Model: `opencode-go/deepseek-v4.1-flash` (`EVAL_MODEL`; the configured default model was
 unavailable in this environment).
 
 ```text
 label     msgs  input  output  reason  cacheRead  cacheWrite  cost
-baseline  5     25097  232     121     31488      0           0.0041
-routed    6     45120  303     175     24576      0           0.0071
+baseline  5     17169  245     44      24576      0           0.0028
+routed    6     30330  287     245     19456      0           0.0049
 ```
 
 - Tasks:
@@ -366,20 +369,20 @@ routed    6     45120  303     175     24576      0           0.0071
   - `fix-typo` — "Fix the typo colur in facts.txt to color using the edit tool."
 - `baseline` = plugin loaded with `skills.enabled=false`, `tools.enabled=false`; `routed` = plugin
   defaults (skill and tool routing enabled). Both modes have `msgs > 0`.
-- Effective input (`input + cacheRead`): baseline `56585`, routed `69696` (~23% worse). Routed is
+- Effective input (`input + cacheRead`): baseline `41745`, routed `49786` (~19% worse). Routed is
   worse on this baseline; recorded as-is, with no tuning applied.
 - **Phase 1 success criteria are set from this baseline.**
 
 Caveats (both should be addressed before later-phase comparisons are trusted):
 
-1. Environment: this machine's global `~/.config/opencode/opencode.jsonc` also lists this repo as
-   a plugin, so `opencode run` loads the plugin twice — once with global default options (routing
-   enabled) and once with the scratch project options. The `baseline` arm therefore still has a
-   routing-enabled instance active, so it is not a pure routing-off control. Running the same
-   script with an isolated global config (`XDG_CONFIG_HOME=<clean dir>`, one plugin load) gives
-   baseline `22582 / 368 / 120 / 39296` and routed `32930 / 165 / 53 / 14592`
-   (input / output / reason / cacheRead).
-2. Variance: the two environments disagree on direction (default run: routed effective input ~23%
-   worse; isolated run: routed ~23% better), and per-task message counts vary (baseline 2–3,
-   routed 3–5). One run per mode over two trivial tasks cannot set a stable success threshold;
-   repeated runs are needed before Phase 2+ regressions can be judged.
+1. Environment (resolved in the script): this machine's global
+   `~/.config/opencode/opencode.jsonc` also lists this repo as a plugin, so a non-isolated
+   `opencode run` loads the plugin twice — once with global default options (routing enabled) and
+   once with the scratch project options — leaving routing active in the `baseline` arm. That
+   earlier non-isolated run was discarded. Since the isolation fix, `scripts/eval.ts` sets
+   `XDG_CONFIG_HOME` to a per-mode scratch dir by default; verification with `--print-logs` shows
+   exactly one `loading plugin` line.
+2. Variance: direction is not stable across runs. This isolated baseline has routed ~19% worse on
+   effective input, while an earlier isolated cross-check had routed ~23% better; per-task message
+   counts also vary (baseline 2–3, routed 3–5). One run per mode over two trivial tasks cannot set
+   a stable success threshold; repeated runs are needed before Phase 2+ regressions can be judged.

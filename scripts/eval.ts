@@ -3,6 +3,10 @@
 //   routed   = plugin defaults
 // Usage comes from the plugin's own JSONL (observe.file), so both modes
 // are measured by the same code path.
+// Runs are config-isolated on purpose: each run gets its own empty
+// XDG_CONFIG_HOME so no user-global opencode config can load this same
+// plugin again (which would keep routing on and contaminate the baseline).
+// XDG_DATA_HOME is left alone because provider auth lives there.
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { formatReport, parseSamples, summarize, type UsageSample } from "../src/observe"
@@ -32,9 +36,12 @@ function run(mode: (typeof modes)[number], task: (typeof tasks)[number]): UsageS
     join(dir, "opencode.json"),
     JSON.stringify({ $schema: "https://opencode.ai/config.json", plugins: [{ package: repo, options: options(dir, mode) }] }, null, 2),
   )
+  // Empty per-mode global config dir: exactly one plugin instance loads (the scratch project's).
+  const configHome = join(root, stamp, mode, "config")
+  mkdirSync(configHome, { recursive: true })
   const args = ["run", "--standalone", "--auto", ...(model ? ["--model", model] : []), task.prompt]
   // opencode resolves its project directory from PWD, not the process cwd, so PWD must match.
-  const result = Bun.spawnSync(["opencode", ...args], { cwd: dir, stdout: "pipe", stderr: "pipe", env: { ...process.env, PWD: dir } })
+  const result = Bun.spawnSync(["opencode", ...args], { cwd: dir, stdout: "pipe", stderr: "pipe", env: { ...process.env, PWD: dir, XDG_CONFIG_HOME: configHome } })
   if (result.exitCode !== 0) {
     console.error(`[eval] ${mode}/${task.id} exited ${result.exitCode}: ${result.stderr.toString().slice(0, 400)}`)
   }

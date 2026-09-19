@@ -614,7 +614,7 @@ const ask = apiKey
 
 Guard both routing hook callbacks with `if (!ask) return` at the top (after the `enabled` check), so observe-only setups never call Jev.
 
-After `agentEnabled`, add the recorder and idle subscription:
+After `agentEnabled`, add the recorder and the usage subscription. Subscribe to `session.idle` **and** the three `session.execution.*` terminal events: Phase 0 found `session.idle` does not fire under `opencode run --standalone` (the execution ends with `session.execution.succeeded`), so idle alone would record nothing headless. Dedupe by message ID makes the extra triggers harmless.
 
 ```ts
 const recorder = createRecorder({ file: options.observe.file, maxSessions: options.observe.retain })
@@ -624,7 +624,14 @@ if (options.observe.enabled) {
   void (async () => {
     try {
       for await (const event of ctx.event.subscribe({ signal: observeAbort.signal })) {
-        if (event.type !== "session.idle") continue
+        if (
+          event.type !== "session.idle" &&
+          event.type !== "session.execution.succeeded" &&
+          event.type !== "session.execution.failed" &&
+          event.type !== "session.execution.interrupted"
+        ) {
+          continue
+        }
         const sessionID = event.data.sessionID
         try {
           const messages = await ctx.session.context({ sessionID })

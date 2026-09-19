@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test"
 import { JevError, asChoice, asNoul, createJev } from "./jev"
+import { formatReport, parseSamples, summarize, usageFromMessages } from "./observe"
 
 type Canned = { status?: number; body: unknown; delayMs?: number }
 
@@ -461,4 +462,71 @@ test("context hook routes tools end to end", async () => {
   } finally {
     mock.server.stop(true)
   }
+})
+
+const assistantMessage = {
+  id: "msg_1",
+  type: "assistant",
+  agent: "build",
+  model: { providerID: "opencode-go", id: "deepseek-v4.1-flash" },
+  time: { created: 1000 },
+  cost: 0.002,
+  tokens: { input: 1200, output: 340, reasoning: 12, cache: { read: 900, write: 100 } },
+}
+
+test("usageFromMessages maps assistant token usage and skips seen ids", () => {
+  const messages = [
+    { id: "msg_0", type: "user" },
+    assistantMessage,
+    { id: "msg_2", type: "assistant" }, // no tokens yet
+    { id: "msg_1", type: "assistant", tokens: { input: 1, output: 1 } }, // duplicate id
+  ]
+  const first = usageFromMessages("ses_1", messages)
+  expect(first).toEqual([
+    {
+      sessionID: "ses_1",
+      messageID: "msg_1",
+      agent: "build",
+      model: "opencode-go/deepseek-v4.1-flash",
+      input: 1200,
+      output: 340,
+      reasoning: 12,
+      cacheRead: 900,
+      cacheWrite: 100,
+      cost: 0.002,
+      time: 1000,
+    },
+  ])
+
+  const seen = new Set(["msg_1"])
+  expect(usageFromMessages("ses_1", messages, seen)).toEqual([])
+})
+
+test("summarize and formatReport aggregate samples", () => {
+  const summary = summarize(usageFromMessages("ses_1", [assistantMessage]))
+  expect(summary).toEqual({
+    messages: 1,
+    input: 1200,
+    output: 340,
+    reasoning: 12,
+    cacheRead: 900,
+    cacheWrite: 100,
+    cost: 0.002,
+  })
+  const report = formatReport([
+    { label: "baseline", summary },
+    { label: "routed", summary: summarize([]) },
+  ])
+  expect(report).toContain("baseline")
+  expect(report).toContain("routed")
+  expect(report.split("\n").length).toBe(3)
+})
+
+test("parseSamples reads usage lines and ignores other kinds", () => {
+  const jsonl = [
+    JSON.stringify({ kind: "usage", ...usageFromMessages("s", [assistantMessage])[0] }),
+    JSON.stringify({ kind: "decision", hook: "skills" }),
+    "",
+  ].join("\n")
+  expect(parseSamples(jsonl).length).toBe(1)
 })

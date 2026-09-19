@@ -31,9 +31,10 @@ the measurement needed to prove any of it.
 
 Platform seams from the installed `@opencode/plugin` and the compiled core:
 
-- **Skill guidance is a rendered instruction block** with key `core/skill-guidance`. The core
-  renders, per model step, permitted skills that have a description and do not set
-  `autoinvoke: false`:
+- **Skill guidance is a rendered instruction block** with internal key `core/skill-guidance` (not
+  exposed on `SystemPart.metadata` — see Phase 0 findings; identify by the `<available_skills>`
+  text). The core renders, per model step, permitted skills that have a description and do not
+  set `autoinvoke: false`:
 
   ```text
   Skills provide specialized instructions and workflows for specific tasks.
@@ -128,6 +129,43 @@ Output goes to `/tmp`; nothing is committed except findings appended to this spe
 "Confirmed facts". Everything else in this spec is written so the mechanisms are chosen after
 this probe; if a probe finding contradicts a section, that section is amended before its
 implementation plan.
+
+## Phase 0 findings (2026-09-19)
+
+Live probe: one `opencode run --standalone --auto "Read demo.txt and quote its contents."` in
+`/tmp/opencode/probe-project` (OpenCode v2.0.8; model `opencode-go/deepseek-v4.1-flash` because
+the configured default model was unavailable), output at `/tmp/system-one-probe/events.jsonl`.
+Run: exit 0; 1 `prompt` line, 3 `context` lines; **no `idle` line** (see below).
+
+- **Skill list location.** `event.system` has 5 parts; the `<available_skills>` block is in
+  **index 2** (0-based): `len=17735` chars, `hasSkills=true`. Every part has
+  `metadata === undefined`, including the skill part. The backing `SystemPart` schema is
+  `{ type: "text", text, cache?, metadata? }` — there is no `key` field, so the core's internal
+  `core/skill-guidance` key is **not observable** in the `context` hook. Match on the
+  `<available_skills>` text (as Phase 2 already specifies), not on metadata.
+- **Tool catalog.** `event.tools` = **12 tools**, total description weight **5733 chars**. The
+  `skill` tool description is a generic 220 chars ("Load a specialized skill's instructions …
+  The skill ID must match an available skill or a skill explicitly referenced by the user.") and
+  does **not** enumerate skills; the catalog lives only in system part 2.
+- **Tool-result part shape** (`event.messages`, role `tool`): `{ type: "tool-result", id, name,
+  namespace, result: { type: "text", value: "<body>" }, providerExecuted, cache?, metadata?,
+  providerMetadata? }` — the body is at **`part.result.value`**, not `part.text` (why the probe's
+  `length` is `undefined` for tool parts). The skill-load marker is a tool-result named `skill`
+  whose `result.value` starts `<skill_content name="Demo Skill">`.
+- **Token usage.** `ctx.session.context({ sessionID })` includes assistant records with
+  `tokens: { input, output, reasoning, cache: { read, write } }` plus `cost` and `model`.
+  Observed across a 3-step turn: `input=9531, cache.read=0` → `input=2926, cache.read=9728` →
+  `input=246, cache.read=12544`; `cache.write=0` throughout. `input` **excludes** `cache.read`:
+  call 2's `input` (2926) is smaller than call 1's full prompt (9531) while call 2 carries
+  `cache.read=9728`; effective input `input + cache.read` grows monotonically (9531 → 12654 →
+  12790).
+- **`session.idle` does not fire under `opencode run --standalone`.** The event stream's terminal
+  events were `session.execution.succeeded` then `location.shutdown`; `session.idle` was never
+  delivered. Because the committed probe writes only on `session.idle`, this mode yields
+  `prompt` + `context` lines but **no `idle` line**. Phase 1 measures usage from `http.response`
+  and is unaffected; the token numbers above were read at `session.execution.succeeded` with a
+  temporary variant. A future probe that needs per-session usage from the event stream should
+  subscribe to `session.execution.succeeded` (or `session.usage.updated`), not `session.idle`.
 
 ## Phase 1 — Measurement (O4)
 
@@ -299,7 +337,7 @@ enabled only after its eval shows no regression.
 | Pruning removes needed detail | Receipts name the source; last-N intact; budget cap; off by default |
 | Extra latency per dispatch | One cached Jev call per hook; 1 s timeout; fail-open |
 | Egress surface grows | No new data leaves the machine; compaction model is user-configured; README updated per phase |
-| Core format changes (skill guidance text) | Match on `<available_skills>` and `core/skill-guidance`; probe re-run in the eval script; fallback to transform mechanism |
+| Core format changes (skill guidance text) | Match on `<available_skills>`; re-run the committed `scripts/probe` after an OpenCode upgrade (the eval script does not re-run it); fallback to transform mechanism |
 
 ## Testing and verification
 

@@ -12,6 +12,7 @@
 
 ## Global Constraints
 
+- **2026-09-19 amendment:** Jev is reached through OpenRouter's alpha Decisions API via `@openrouter/sdk` (now a runtime dependency); default model `~typesafe/jev-latest`. This supersedes the native-transport constraints below.
 - No new runtime dependencies. The only added dev dependency is `@types/bun` (types for `bun:test` so `tsc --noEmit` passes). Do not add `@typesafe-ai/sdk`.
 - Every Jev call fails open: timeout, non-2xx, malformed answer, or low confidence → no filter, no skill, no hint. Never throw out of a hook.
 - Default values are exactly: `model: "jev-latest"`, `timeoutMs: 1000`, `skills.rerank: "auto"`, `skills.gateThreshold: 0.3`, `skills.rerankAbove: 40`, `skills.rerankBelowP: 0.5`, `skills.shortlist: 3`, `skills.fitsThreshold: 0.3`, `skills.minConfidence: 0.3`, `tools.maxTools: 12`, `tools.minToolProbability: 0.05`, `tools.needsToolThreshold: 0.3`, `tools.minConfidence: 0.3`, `tools.alwaysVisible: ["read", "write", "edit", "bash", "grep", "glob"]`, `tools.stateBudget: 6000`.

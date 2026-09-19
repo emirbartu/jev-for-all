@@ -26,8 +26,8 @@ tokens (no tool-choice reasoning), more correct skill loads, no loss of capabili
   `tools: Record<string, { description: string; input: JsonSchema }>`, `options`.
   Async callbacks are awaited. Hooks can be scoped `{ providerID }`.
 - `SystemPart = { type: "text"; text: string; cache?; metadata? }`.
-- `ctx.skill.list()` → `SkillInfo[]` (`id`, `name`, `description?`, `path`, `content`,
-  `autoinvoke?`).
+- `ctx.skill.list()` → `{ location, data: SkillInfo[] }` (`SkillInfo`: `id`, `name`,
+  `description?`, `path`, `content`, `autoinvoke?`).
 - `ctx.storage` exists for durable JSON, but v1 needs no persistence.
 - Hook registration returns `Registration` with `dispose()`; unloading the plugin
   disposes its registrations.
@@ -136,7 +136,7 @@ state string and the current `event.tools` catalog, so tests inject fakes.
 ## Wiring (`index.ts`)
 
 - Read `ctx.options` with defaults; invalid values fall back with a logged warning.
-- API key from `options.apiKey` or `TYPESAFE_API_KEY`; missing key → register nothing,
+- API key from `options.apiKey` or `OPENROUTER_API_KEY`; missing key → register nothing,
   log once, plugin is inert.
 - Register both hooks; keep `Registration`s; return a cleanup that disposes them.
 - **Cache**: in-memory `Map`, key = `sessionID + hash(questionIds + state)`; max 200
@@ -153,8 +153,8 @@ state string and the current `event.tools` catalog, so tests inject fakes.
   "plugins": [{
     "package": "opencode-system-one",
     "options": {
-      "apiKey": "sk-...",          // or env TYPESAFE_API_KEY
-      "model": "jev-latest",
+      "apiKey": "sk-...",          // or env OPENROUTER_API_KEY
+      "model": "~typesafe/jev-latest",
       "timeoutMs": 1000,
       "debug": false,
       "agents": ["build"],
@@ -202,7 +202,7 @@ failed call.
 ## Non-goals (v1)
 
 Argument filling (function-calling cookbook), permission/guardrails hooks, context
-pruning, OpenRouter transport (seam stays in `src/jev.ts`), V1 compat, telemetry.
+pruning, V1 compat, telemetry.
 
 ## Risks
 
@@ -215,6 +215,10 @@ pruning, OpenRouter transport (seam stays in `src/jev.ts`), V1 compat, telemetry
 - **Prompt hook is not exactly-once**: dedupe the skill push.
 - **Transport uncertainty** (OpenRouter beta): resolved by the one-line curl check;
   only `src/jev.ts` changes.
+- **Third-party data egress**: every model dispatch ships the conversation tail —
+  including tool-result bodies such as file contents and shell output — plus the tool
+  catalog names/descriptions to OpenRouter's alpha Decisions endpoint. `README.md` is the
+  disclosure point for users.
 
 ## Amendment 2026-09-19: OpenRouter transport (supersedes the native TypeSafe transport)
 

@@ -56,7 +56,8 @@ test("createJev throws JevError on non-2xx", async () => {
   const mock = mockJevServer(() => ({ status: 429, body: { error: { message: "slow down" } } }))
   try {
     const ask = createJev({ apiKey: "k", serverURL: mock.serverURL })
-    await expect(ask({ state: {}, questions: {} })).rejects.toThrow(JevError)
+    await expect(ask({ state: {}, questions: {} })).rejects.toMatchObject({ status: 429 })
+    expect(mock.requests.length).toBe(1)
   } finally {
     mock.server.stop(true)
   }
@@ -73,10 +74,27 @@ test("createJev throws JevError on a response without answers", async () => {
 })
 
 test("createJev honours timeoutMs", async () => {
-  const mock = mockJevServer(() => ({ body: { answers: {} }, delayMs: 200 }))
+  const mock = mockJevServer(() => ({
+    body: {
+      answers: { which: { type: "choice", choice: "read", probabilities: { read: 1 }, confidence: 1 } },
+      model: "~typesafe/jev-latest",
+      usage: { input_tokens: 10, output_tokens: 4 },
+    },
+    delayMs: 200,
+  }))
   try {
     const ask = createJev({ apiKey: "k", serverURL: mock.serverURL, timeoutMs: 50 })
-    await expect(ask({ state: {}, questions: {} })).rejects.toThrow()
+    let error: unknown
+    const started = performance.now()
+    try {
+      await ask({ state: {}, questions: {} })
+    } catch (caught) {
+      error = caught
+    }
+    const elapsed = performance.now() - started
+    expect(error).toBeInstanceOf(JevError)
+    expect(elapsed).toBeLessThan(150)
+    expect((error as Error).message).toMatch(/timed out/i)
   } finally {
     mock.server.stop(true)
   }

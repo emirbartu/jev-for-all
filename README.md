@@ -26,7 +26,8 @@ tool catalog, no tool-choice reasoning, and more reliable skill loads.
         "tools":  { "enabled": true, "maxTools": 12, "minToolProbability": 0.05,
                     "needsToolThreshold": 0.3, "minConfidence": 0.3,
                     "alwaysVisible": ["read","write","edit","bash","grep","glob"],
-                    "stateBudget": 6000 }
+                    "stateBudget": 6000 },
+        "observe": { "enabled": false, "file": "/tmp/system-one-usage.jsonl", "retain": 20 }
       }
     }
   ]
@@ -43,6 +44,9 @@ Zero config works once the env var is set. Main options:
 - `agents` — allowlist for tool routing (default: all agents).
 - `debug` — log routing decisions.
 - `serverURL` — override the API host (test/proxy seam; default `https://openrouter.ai`).
+- `observe.enabled` — record per-message usage (default false).
+- `observe.file` — JSONL path for usage records (optional; nothing written when unset).
+- `observe.retain` — in-memory session cap for usage dedupe (default 20).
 
 ## Data egress
 
@@ -54,6 +58,9 @@ catalog's names and descriptions. Tool input schemas are not sent. Nothing is se
 API key is configured or the plugin is disabled.
 
 There is no option to exclude tool-result bodies from the state today.
+
+Usage records are local numbers only (message counts, tokens, cache, cost) and are never
+uploaded.
 
 ## Fail-open
 

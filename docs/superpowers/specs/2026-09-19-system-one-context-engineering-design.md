@@ -97,7 +97,8 @@ context hook    → Jev tool routing   → filter event.tools + hint       (v1)
                   + context pruning   → elide stale tool-result bodies
                   + control hints     → verification / stuck detection
 compaction hook → cheap-model checkpoint + Jev validation → result.summary
-http.response   → usage records → ctx.storage (local only)
+session idle /  → read ctx.session.context → usage records → observe.file JSONL
+exec terminal                                               + ctx.storage (local only)
 ```
 
 ### Files
@@ -108,8 +109,8 @@ http.response   → usage records → ctx.storage (local only)
 | `src/tools.ts` | v1 routing; add stable ordering + namespace routing |
 | `src/prune.ts` | `elideMessages(messages, config) → {changed, receipts}` pure function |
 | `src/compact.ts` | checkpoint prompt template, summary validation (headings + Jev nouls) |
-| `src/observe.ts` | usage/decision records, storage layout, report aggregation |
-| `scripts/probe.ts` | Phase 0: dump one live turn's `system`, `tools`, `messages` shapes |
+| `src/observe.ts` | usage records, storage layout, report aggregation |
+| `scripts/probe/index.ts` | Phase 0: dump one live turn's `system`, `tools`, `messages` shapes |
 | `scripts/eval.ts` | golden tasks, on/off runs, delta report |
 | `index.ts` | wiring, options, per-session decision memory, cleanup |
 
@@ -162,9 +163,10 @@ Run: exit 0; 1 `prompt` line, 3 `context` lines; **no `idle` line** (see below).
 - **`session.idle` does not fire under `opencode run --standalone`.** The event stream's terminal
   events were `session.execution.succeeded` then `location.shutdown`; `session.idle` was never
   delivered. Because the committed probe writes only on `session.idle`, this mode yields
-  `prompt` + `context` lines but **no `idle` line**. Phase 1 measures usage from `http.response`
-  and is unaffected; the token numbers above were read at `session.execution.succeeded` with a
-  temporary variant. A future probe that needs per-session usage from the event stream should
+  `prompt` + `context` lines but **no `idle` line**. Phase 1 measures usage by subscribing to
+  `session.idle` **and** the `session.execution.{succeeded,failed,interrupted}` terminal events, so
+  this mode is unaffected; the token numbers above were read at `session.execution.succeeded` with
+  a temporary variant. A future probe that needs per-session usage from the event stream should
   subscribe to `session.execution.succeeded` (or `session.usage.updated`), not `session.idle`.
 
 ## Phase 1 — Measurement (O4)
@@ -173,16 +175,23 @@ Run: exit 0; 1 `prompt` line, 3 `context` lines; **no `idle` line** (see below).
 input/cache ratios, Jev latency in production, routing mistakes.
 
 **Design.**
-- `http.response` hook (kind `primary` only by default): clone the body, parse usage from JSON
-  or SSE, append one record to a bounded per-session ring in `ctx.storage`
-  (`observe/usage/<sessionID>`): timestamp, kind, inputTokens, outputTokens, cacheRead,
-  cacheWrite, cost, `tools.length`, and whether routing applied.
-- Decision log (`observe/decisions/<sessionID>`): hook, decision summary, cache hit, latency.
-- `scripts/eval.ts`: ~5 golden tasks run headless (`opencode run`) twice — plugin off, plugin
-  on — then prints tokens, cache ratios, wall time, and pass/fail. No frameworks; Bun script
-  and JSON output.
-- Config: `observe.enabled` (default false), `observe.retain` (default 20 sessions).
-- Privacy: records are usage numbers and decisions only — no message text. Local storage only.
+- Usage source (shipped): `index.ts` subscribes to `session.idle` **and** the
+  `session.execution.{succeeded,failed,interrupted}` terminal events, reads
+  `ctx.session.context({ sessionID })`, and normalizes each assistant record's `tokens` (`input`,
+  `output`, `reasoning`, `cache.read`, `cache.write`) plus `cost`, `model`, and `agent`, deduping
+  by message ID. There is no `http.response` hook and the provider body is never parsed; the same
+  normalized `TokenUsage.Info` comes from the core. Records are appended as JSONL (`kind:
+  "usage"`) to `observe.file` and mirrored to a bounded `ctx.storage` ring at
+  `observe/usage/<sessionID>` (last 500 samples).
+- `src/observe.ts` holds the pure parse/summarize/format helpers and the recorder; `scripts/eval.ts`
+  runs the golden fixture tasks headless (`opencode run`) twice — plugin off, plugin on — reads the
+  JSONL, and prints the before/after table. No frameworks; Bun script.
+- Not implemented (future work): per-sample `tools.length` and a "routing applied" flag (the
+  context hook's decision is not recorded alongside usage), the `http.response` hook, and the
+  decision log (`observe/decisions/<sessionID>`).
+- Config: `observe.enabled` (default false), `observe.file` (optional JSONL path), `observe.retain`
+  (in-memory session cap, default 20).
+- Privacy: records are usage numbers only — no message text. Local files/storage only.
 
 **Done when** one eval run prints a believable before/after table; success criteria are set
 from that baseline (target: tool-definition tokens ≥ 50% lower on MCP-heavy catalogs, no
@@ -344,7 +353,7 @@ enabled only after its eval shows no regression.
 1. `bun test` grows per phase: pure functions first (visibility policy, elision, summary
    validation, stable ordering, option parsing), hook tests with the existing mock server.
 2. `bun run typecheck`.
-3. `scripts/probe.ts` output committed as findings (raw dumps not committed).
+3. `scripts/probe/index.ts` output committed as findings (raw dumps not committed).
 4. `scripts/eval.ts` before/after table recorded in the PR for each phase that claims savings.
 
 ## Phase 1 baseline (2026-09-19)

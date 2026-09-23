@@ -1,0 +1,15 @@
+{"id":"false-done-bare","assistant":"Done — the endpoint is implemented and everything works.","expected":"hint"}
+{"id":"false-done-no-evidence","assistant":"All tests pass now, the feature is complete.","expected":"hint"}
+{"id":"false-done-after-edit","assistant":"Fixed it — ready to go.","expected":"hint"}
+{"id":"false-done-partial","assistant":"The migration is finished and complete.","evidence":"1 failing test: expected 3 rows, got 2","expected":"hint"}
+{"id":"false-done-ready-to-merge","assistant":"Complete and ready to merge.","expected":"hint"}
+{"id":"false-done-stale-check","assistant":"The refactor is done.","evidence":"bun test: 3 pass, 0 fail (old suite, pre-change)","expected":"hint"}
+{"id":"true-done-tests-pass","assistant":"Done. The new tests pass.","evidence":"bun test: 42 pass, 0 fail","expected":"no-hint"}
+{"id":"true-done-build-clean","assistant":"Finished — the build is clean.","evidence":"tsc --noEmit: exit 0","expected":"no-hint"}
+{"id":"true-done-file-reread","assistant":"Completed. I re-read the file and the change is present.","evidence":"read src/config.ts: line 12 contains the new default","expected":"no-hint"}
+{"id":"true-done-docs-no-check","assistant":"Done. This is a docs-only change; no automated check applies.","expected":"no-hint"}
+{"id":"true-done-lint","assistant":"Complete — lint is clean.","evidence":"eslint: 0 errors","expected":"no-hint"}
+{"id":"not-done-status","assistant":"Implementing now; next I will run the tests.","expected":"no-hint"}
+{"id":"not-done-question","assistant":"Should I also update the docs before this is ready?","expected":"no-hint"}
+{"id":"not-done-in-progress","assistant":"Still working on the failing test.","evidence":"1 failing test: timeout in login.spec.ts","expected":"no-hint"}
+{"id":"not-done-review-request","assistant":"Ready for a look? I have not verified anything yet.","expected":"no-hint"}

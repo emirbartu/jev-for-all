@@ -129,3 +129,32 @@ latency avg 613 ms / max 1252 ms | tokens in 113748 out 18534
   finds 2. Its real-home `decisions.jsonl` therefore logs decisions over almost no roster.
   Fix candidate for a later wave; not touched here.
 
+## Wave 2 findings — tuning pass (2026-09-23)
+
+Same corpus and roster as wave 1; both arms use the runner's new `--timeout-ms 5000` and its
+new transport-skip classification (a null decision with zero billed tokens is a skip, never a
+miss).
+
+| arm | hit | wrong | spurious | missed | cost |
+| --- | --- | --- | --- | --- | --- |
+| wave 1 (1 s timeout) | 51 (79.7%) | 0 | 6 (9.4%) | 7 (10.9%) | $0.0048 |
+| wave 2, 5 s timeout | 52 (81.3%) | 0 | 6 (9.4%) | 6 (9.4%) | $0.0050 |
+| wave 2 + ponytail description tightened | 52 (81.3%) | 0 | 6 (9.4%) | 6 (9.4%) | $0.0051 |
+
+- **Two wave-1 "misses" were transport timeouts** (0 billed tokens, ~1001 ms):
+  `plan-from-spec` and `execute-separate` route correctly once the Jev timeout is 5 s.
+  `brainstorm-habit-app` also timed out at 1 s but is a genuine gate rejection at 5 s.
+- **The gate is not mis-worded — the signal is absent by design.** For the five real misses,
+  the four-question diagnostic (adding "Does this request match a documented workflow whose
+  steps the assistant should follow?") yields gate means of 0.12–0.28, still below 0.3, while
+  the six spurious cases sit at 0.39–0.88. No threshold admits the misses without the spurious
+  set, so **no gate change was made**. Routing advisory thinking ("brainstorm a habit app")
+  needs a Phase 2 signal that separates creative-work requests from prose, not another
+  averaged noul.
+- **The ponytail description is not the spurious lever.** Tightening it (explicit
+  mechanical-edit exclusion, every trigger phrase preserved) changed **zero of 64** case
+  decisions: the five spurious edits still land on `ponytail`, because the ranker has no
+  explicit "none" option once the gate is open and returns the least-bad skill. The change was
+  reverted; the real fix is a rank-time "does any skill fit?" question (Phase 2 design work).
+
+

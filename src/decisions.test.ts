@@ -556,3 +556,156 @@ test("readOptions parses observe options", () => {
   const custom = readOptions({ observe: { enabled: true, file: "/tmp/u.jsonl", retain: 3 } })
   expect(custom.observe).toEqual({ enabled: true, file: "/tmp/u.jsonl", retain: 3 })
 })
+import { formatTemplate, policy } from "./policy"
+
+test("policy carries the shipped defaults verbatim", () => {
+  expect(policy.skills).toMatchObject({
+    gateThreshold: 0.3,
+    rerank: "auto",
+    rerankAbove: 40,
+    rerankBelowP: 0.5,
+    shortlist: 3,
+    fitsThreshold: 0.3,
+    minConfidence: 0.3,
+    ids: {
+      rank: "which",
+      rerank: "which",
+      gateActs: "gate::acts",
+      gateProcedure: "gate::procedure",
+      gateProse: "gate::prose",
+      fits: "fits::{{id}}",
+    },
+  })
+  expect(policy.tools).toMatchObject({
+    maxTools: 12,
+    minToolProbability: 0.05,
+    needsToolThreshold: 0.3,
+    minConfidence: 0.3,
+    alwaysVisible: ["read", "write", "edit", "bash", "grep", "glob"],
+    stateBudget: 6000,
+    ids: { next: "next", needsTool: "needs_tool" },
+  })
+  expect(policy.cache).toEqual({ max: 200, ttlMs: 600000 })
+  expect(policy.spend).toEqual({ maxCallsPerSession: 500, warnAt: 0.8 })
+})
+
+test("formatTemplate substitutes named placeholders", () => {
+  expect(formatTemplate("Skill '{{name}}' fits", { name: "pptx-author" })).toBe("Skill 'pptx-author' fits")
+  expect(formatTemplate("fits::{{id}}", { id: "pptx-edit" })).toBe("fits::pptx-edit")
+  expect(formatTemplate("no placeholders", {})).toBe("no placeholders")
+  expect(formatTemplate("keep {{unknown}} as-is", {})).toBe("keep {{unknown}} as-is")
+})
+
+import { defaultSkillRouting } from "./skills"
+
+test("skill routing defaults are the policy values", () => {
+  expect(defaultSkillRouting).toEqual({
+    gateThreshold: 0.3,
+    rerank: "auto",
+    rerankAbove: 40,
+    rerankBelowP: 0.5,
+    shortlist: 3,
+    fitsThreshold: 0.3,
+    minConfidence: 0.3,
+  })
+})
+
+test("skill questions use the policy ids and text", async () => {
+  const { ask, calls } = stubAsk({
+    which: { type: "choice", choice: "pptx-author", probabilities: { "pptx-author": 0.9, "pptx-edit": 0.1 }, confidence: 0.9 },
+    ...openGate,
+  })
+  await selectSkill(ask, { request: "build me a deck", skills: skillRoster, config: { rerank: false } })
+  const questions = (calls[0] as { questions: Record<string, { instructions: string }> }).questions
+  expect(questions[policy.skills.ids.rank].instructions).toBe(policy.skills.questions.rank)
+  expect(questions[policy.skills.ids.gateActs].instructions).toBe(policy.skills.questions.gateActs)
+  expect(questions[policy.skills.ids.gateProcedure].instructions).toBe(policy.skills.questions.gateProcedure)
+  expect(questions[policy.skills.ids.gateProse].instructions).toBe(policy.skills.questions.gateProse)
+})
+
+test("rerank fits questions use the policy template", async () => {
+  const { ask, calls } = stubAsk(
+    {
+      which: { type: "choice", choice: "pptx-author", probabilities: { "pptx-author": 0.6, "pptx-edit": 0.4 }, confidence: 0.9 },
+      ...openGate,
+    },
+    {
+      which: { type: "choice", choice: "pptx-edit", probabilities: { "pptx-author": 0.4, "pptx-edit": 0.6 }, confidence: 0.9 },
+      "fits::pptx-author": { type: "noul", noul: 0.2 },
+      "fits::pptx-edit": { type: "noul", noul: 0.8 },
+    },
+  )
+  await selectSkill(ask, { request: "edit my deck", skills: skillRoster, config: { rerank: "auto", rerankAbove: 1 } })
+  const second = calls[1] as { questions: Record<string, { instructions: string }> }
+  expect(second.questions[formatTemplate(policy.skills.ids.fits, { id: "pptx-edit" })].instructions).toBe(
+    formatTemplate(policy.skills.questions.fits, { name: "pptx-edit" }),
+  )
+})
+
+import { defaultToolRouting } from "./tools"
+
+test("tool routing defaults are the policy values", () => {
+  expect(defaultToolRouting).toEqual({
+    maxTools: 12,
+    minToolProbability: 0.05,
+    needsToolThreshold: 0.3,
+    minConfidence: 0.3,
+    alwaysVisible: ["read", "write", "edit", "bash", "grep", "glob"],
+    stateBudget: 6000,
+  })
+})
+
+test("tool questions use the policy ids and text", async () => {
+  const { ask, calls } = stubAsk({
+    next: { type: "choice", choice: "read", probabilities: { read: 1 }, confidence: 1 },
+    needs_tool: { type: "noul", noul: 0.9 },
+  })
+  await routeTools(ask, { state: "hi", catalog: { read: { description: "Read" } }, config: { alwaysVisible: [] } })
+  const questions = (calls[0] as { questions: Record<string, { instructions: string }> }).questions
+  expect(questions[policy.tools.ids.next].instructions).toBe(policy.tools.questions.next)
+  expect(questions[policy.tools.ids.needsTool].instructions).toBe(policy.tools.questions.needsTool)
+})
+
+test("routing hint strings come from the policy", async () => {
+  const { ask } = stubAsk({
+    next: { type: "choice", choice: "grep", probabilities: { grep: 0.7, edit: 0.2 }, confidence: 0.9 },
+    needs_tool: { type: "noul", noul: 0.9 },
+  })
+  const decision = await routeTools(ask, {
+    state: "hi",
+    catalog: { read: { description: "Read" }, grep: { description: "Search" }, edit: { description: "Edit" } },
+    config: { maxTools: 1, alwaysVisible: ["read"] },
+  })
+  expect(decision?.hint).toBe(
+    [
+      policy.tools.hints.open,
+      formatTemplate(policy.tools.hints.start, { start: "grep" }),
+      formatTemplate(policy.tools.hints.available, { tools: "grep, read" }),
+      policy.tools.hints.narrowed,
+      policy.tools.hints.fallback,
+      policy.tools.hints.close,
+    ].join("\n"),
+  )
+})
+
+test("no-tool hint comes from the policy", async () => {
+  const { ask } = stubAsk({
+    next: { type: "choice", choice: "read", probabilities: { read: 1 }, confidence: 1 },
+    needs_tool: { type: "noul", noul: 0.05 },
+  })
+  const decision = await routeTools(ask, { state: "hi", catalog: { read: { description: "Read" } } })
+  expect(decision?.hint).toBe(
+    [policy.tools.hints.open, policy.tools.hints.noTool, policy.tools.hints.close].join("\n"),
+  )
+})
+
+import { runConformance } from "../scripts/conformance"
+
+test("conformance fixtures pass against the TS core", async () => {
+  const result = await runConformance(
+    readFileSync(new URL("../fixtures/conformance.jsonl", import.meta.url), "utf8"),
+  )
+  expect(result.failures).toEqual([])
+  expect(result.total).toBe(9)
+  expect(result.passed).toBe(9)
+})

@@ -63,28 +63,56 @@ def _parse_frontmatter(text: str) -> dict:
     return {"name": fields.get("name"), "description": fields.get("description"), "body": body}
 
 
+def _read_skill(path: Path, leaf: str) -> dict | None:
+    try:
+        parsed = _parse_frontmatter(path.read_text())
+    except OSError:
+        return None
+    return {
+        "id": leaf,
+        "name": parsed.get("name") or leaf,
+        "description": parsed.get("description"),
+        "content": parsed["body"],
+        "path": str(path),
+    }
+
+
 def scan_skills(dirs: Sequence[str]) -> list[dict]:
+    """Scan one or two levels: <dir>/<skill>/SKILL.md and <dir>/<category>/<skill>/SKILL.md.
+
+    Hidden entries are skipped, ids are leaf directory names, and a duplicate id
+    keeps the first (top-level) occurrence. A directory with no SKILL.md at
+    either level contributes nothing.
+    """
     skills = []
+    seen = set()
+
+    def add(path: Path, leaf: str) -> None:
+        if leaf in seen:
+            return
+        skill = _read_skill(path, leaf)
+        if skill is not None:
+            seen.add(leaf)
+            skills.append(skill)
+
     for directory in dirs:
         try:
-            entries = sorted(Path(directory).iterdir())
+            entries = sorted(
+                entry for entry in Path(directory).iterdir() if entry.is_dir() and not entry.name.startswith(".")
+            )
         except OSError:
             continue
         for entry in entries:
-            path = entry / "SKILL.md"
+            add(entry / "SKILL.md", entry.name)
+        for entry in entries:
             try:
-                parsed = _parse_frontmatter(path.read_text())
+                children = sorted(
+                    child for child in entry.iterdir() if child.is_dir() and not child.name.startswith(".")
+                )
             except OSError:
                 continue
-            skills.append(
-                {
-                    "id": entry.name,
-                    "name": parsed.get("name") or entry.name,
-                    "description": parsed.get("description"),
-                    "content": parsed["body"],
-                    "path": str(path),
-                }
-            )
+            for child in children:
+                add(child / "SKILL.md", child.name)
     return skills
 
 

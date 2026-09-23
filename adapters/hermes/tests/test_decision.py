@@ -86,6 +86,51 @@ class DecisionTest(unittest.TestCase):
             self.assertEqual(skills["alpha"]["content"].strip(), "Alpha body")
             self.assertEqual(skills["broken"]["name"], "broken")
 
+    def test_scan_skills_nested_categories(self):
+        with tempfile.TemporaryDirectory() as root:
+            top = Path(root) / "top-skill"
+            top.mkdir()
+            (top / "SKILL.md").write_text("---\nname: Top\ndescription: Top skill\n---\n\nTop body\n")
+            category = Path(root) / "category"
+            category.mkdir()
+            (category / "DESCRIPTION.md").write_text("Category blurb, not a skill\n")
+            nested = category / "nested-skill"
+            nested.mkdir()
+            (nested / "SKILL.md").write_text("---\nname: Nested\ndescription: Nested skill\n---\n\nNested body\n")
+            docs = Path(root) / "docs"
+            docs.mkdir()
+            (docs / "notes.md").write_text("no skill here\n")
+            hidden = Path(root) / ".hidden"
+            hidden.mkdir()
+            (hidden / "SKILL.md").write_text("---\nname: Hidden\n---\n\nHidden body\n")
+            hidden_nested = category / ".hidden-skill"
+            hidden_nested.mkdir()
+            (hidden_nested / "SKILL.md").write_text("---\nname: Hidden nested\n---\n\nHidden body\n")
+            skills = decision.scan_skills([root])
+            self.assertEqual([entry["id"] for entry in skills], ["top-skill", "nested-skill"])
+            by_id = {entry["id"]: entry for entry in skills}
+            self.assertEqual(set(by_id["nested-skill"]), {"id", "name", "description", "content", "path"})
+            self.assertEqual(by_id["nested-skill"]["name"], "Nested")
+            self.assertEqual(by_id["nested-skill"]["description"], "Nested skill")
+            self.assertEqual(by_id["nested-skill"]["content"].strip(), "Nested body")
+            self.assertEqual(by_id["nested-skill"]["path"], str(nested / "SKILL.md"))
+            self.assertEqual(by_id["top-skill"]["path"], str(top / "SKILL.md"))
+
+    def test_scan_skills_dedupe_top_level_wins(self):
+        with tempfile.TemporaryDirectory() as root:
+            top = Path(root) / "same"
+            top.mkdir()
+            (top / "SKILL.md").write_text("---\nname: Top\ndescription: Top level\n---\n\nTop body\n")
+            category = Path(root) / "aaa"
+            category.mkdir()
+            nested = category / "same"
+            nested.mkdir()
+            (nested / "SKILL.md").write_text("---\nname: Nested\ndescription: Nested\n---\n\nNested body\n")
+            skills = decision.scan_skills([root])
+            self.assertEqual([entry["id"] for entry in skills], ["same"])
+            self.assertEqual(skills[0]["name"], "Top")
+            self.assertEqual(skills[0]["path"], str(top / "SKILL.md"))
+
     def test_transport_parses_answers_and_reports_meta(self):
         class FakeResponse:
             def __init__(self, body):

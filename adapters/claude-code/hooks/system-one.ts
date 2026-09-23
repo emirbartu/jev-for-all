@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs"
 import { createJev, type Ask } from "../../../src/jev"
+import { policy } from "../../../src/policy"
 import { NONE_CONTEXT, decide, injectionFor } from "../lib/decide"
 import { defaultSkillDirs, scanSkillDirs } from "../lib/roster"
 import { readState, writeState } from "../lib/state"
@@ -13,8 +14,8 @@ interface HookInput {
   tool_name?: string
 }
 
-const CAP = 500
-const WARN_AT = 0.8
+const CAP = policy.spend.maxCallsPerSession
+const WARN_AT = policy.spend.warnAt
 
 function emit(value: unknown): void {
   process.stdout.write(JSON.stringify(value) + "\n")

@@ -31,6 +31,9 @@ export interface SkillPolicy {
     withContent: string
     contentChars: number
   }
+  injection: {
+    chars: number
+  }
 }
 
 export interface ToolPolicy {

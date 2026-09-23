@@ -1,3 +1,4 @@
+import { formatTemplate, policy } from "./policy"
 import { type Ask, asChoice, asNoul } from "./jev"
 
 export interface ToolRoutingConfig {
@@ -10,12 +11,12 @@ export interface ToolRoutingConfig {
 }
 
 export const defaultToolRouting: ToolRoutingConfig = {
-  maxTools: 12,
-  minToolProbability: 0.05,
-  needsToolThreshold: 0.3,
-  minConfidence: 0.3,
-  alwaysVisible: ["read", "write", "edit", "bash", "grep", "glob"],
-  stateBudget: 6000,
+  maxTools: policy.tools.maxTools,
+  minToolProbability: policy.tools.minToolProbability,
+  needsToolThreshold: policy.tools.needsToolThreshold,
+  minConfidence: policy.tools.minConfidence,
+  alwaysVisible: [...policy.tools.alwaysVisible],
+  stateBudget: policy.tools.stateBudget,
 }
 
 export interface ToolDecision {
@@ -28,9 +29,10 @@ export interface ToolDecision {
 
 export type MessageLike = { role: string; content?: readonly unknown[] }
 
-const ROUTE_INSTRUCTIONS = "Which single tool is the best next step for the agent to make progress?"
-const NEEDS_TOOL = "Does making progress on the last step require calling a tool?"
-export const NO_TOOL_HINT = "<system_one_routing>\nNo tool is needed for this step; answer directly.\n</system_one_routing>"
+const HINTS = policy.tools.hints
+const IDS = policy.tools.ids
+
+export const NO_TOOL_HINT = [HINTS.open, HINTS.noTool, HINTS.close].join("\n")
 
 function stringify(value: unknown): string {
   if (typeof value === "string") return value
@@ -73,13 +75,13 @@ export async function routeTools(
     const answers = await ask({
       state: input.state,
       questions: {
-        next: { type: "choice", instructions: ROUTE_INSTRUCTIONS, criteria },
-        needs_tool: { type: "noul", instructions: NEEDS_TOOL },
+        [IDS.next]: { type: "choice", instructions: policy.tools.questions.next, criteria },
+        [IDS.needsTool]: { type: "noul", instructions: policy.tools.questions.needsTool },
       },
     })
 
-    const next = asChoice(answers.next)
-    const needs = asNoul(answers.needs_tool)
+    const next = asChoice(answers[IDS.next])
+    const needs = asNoul(answers[IDS.needsTool])
     if (!next || !needs) return null
     if ((next.confidence ?? 1) < config.minConfidence) return null
 
@@ -100,12 +102,12 @@ export async function routeTools(
 
     const filtered = chosen.length < names.length
     const start = ranked[0]
-    const lines = ["<system_one_routing>"]
-    if (start) lines.push(`Start with: ${start}.`)
-    lines.push(`Available now: ${chosen.join(", ")}.`)
-    if (filtered) lines.push("The tool list is already narrowed for this step; do not deliberate about tool choice, act.")
-    lines.push("If none of these fit, say what you need in your reply instead of guessing.")
-    lines.push("</system_one_routing>")
+    const lines = [HINTS.open]
+    if (start) lines.push(formatTemplate(HINTS.start, { start }))
+    lines.push(formatTemplate(HINTS.available, { tools: chosen.join(", ") }))
+    if (filtered) lines.push(HINTS.narrowed)
+    lines.push(HINTS.fallback)
+    lines.push(HINTS.close)
 
     return { tools: chosen, start, needsTool: true, filtered, hint: lines.join("\n") }
   } catch {

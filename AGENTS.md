@@ -90,7 +90,7 @@ Install for use is a local path (`{ "package": "/abs/path/to/repo" }`); not publ
 | `adapters/` | Claude Code and Hermes skill-selection adapters, each with its own tests, assets, and README. |
 | `src/decisions.test.ts` | Every test, with `mockJevServer` (Bun.serve on port 0) asserting the exact request path/body. |
 | `scripts/` | Live probes, headless eval, eval fixtures. |
-| `docs/superpowers/` | Specs and plans — design history, not current truth. |
+| `docs/superpowers/` | Local working docs (specs and plans) — gitignored, not part of the repo. |
 
 ## Wiring facts an agent cannot infer from a file read
 
@@ -138,10 +138,9 @@ Install for use is a local path (`{ "package": "/abs/path/to/repo" }`); not publ
 - The `context` hook fires on every dispatch, so a Jev call is on the hot path. Anything added
   there must stay cached, timeout-bounded, and fail-open.
 - Only v1 routing, usage observation, the goal-driven browser tool, and the Claude Code /
-  Hermes skill-selection adapters are shipped. Phases 2–6 in
-  `docs/superpowers/specs/2026-09-19-system-one-context-engineering-design.md` (skill
-  authority, namespace routing, compaction, pruning, loop control) are spec-only; none of it
-  exists in code yet.
+  Hermes skill-selection adapters are shipped. Phases 2–6 (skill authority, namespace routing,
+  compaction, pruning, loop control) live in the local, gitignored working spec under
+  `docs/superpowers/specs/`; none of it exists in code yet.
 - `browser_task` needs a Chromium-family browser connected through browser-harness, a jev
   checkout with filled credentials, and `uv` on `PATH` — all outside this repo, so it fails with
   a readable reason instead of throwing when any of them is missing.

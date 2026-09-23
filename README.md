@@ -1,12 +1,13 @@
 # jev-for-all
 
 **Jev for every agentic development workflow.** The home for using the System One model Jev
-(TypeSafe, reached through OpenRouter's alpha Decisions API) wherever an agent codes —
-OpenCode today, Claude Code and Hermes adapters next — so every workflow gets Jev's benefits
-from one shared contract.
+(TypeSafe, reached through OpenRouter's alpha Decisions API) wherever an agent codes — OpenCode,
+Claude Code and Hermes today — so every workflow gets Jev's benefits from one shared contract.
 
-Shipped piece: an OpenCode V2 plugin that pairs Jev with a classic coding agent. Jev makes the
-fast, structured decisions — which skill to load, which tool subset this step needs — and the
+Shipped today, from one shared contract: the OpenCode V2 plugin (repo root), the Claude Code
+plugin (`adapters/claude-code`), the Hermes plugin (`adapters/hermes`), and the `browser_task`
+MCP server (`adapters/browser-mcp`). Jev makes the fast, structured decisions — which skill to
+load, which tool subset this step needs, whether a browser run is the right move — and the
 classic agent does the work. The agent starts building instead of deliberating: a smaller tool
 catalog, no tool-choice reasoning, and more reliable skill loads.
 
@@ -33,7 +34,8 @@ catalog, no tool-choice reasoning, and more reliable skill loads.
                     "stateBudget": 6000 },
         "observe": { "enabled": false, "file": "/tmp/system-one-usage.jsonl", "retain": 20 },
         "browser": { "enabled": false, "jevDir": "~/jev-ultrafast",
-                     "maxSteps": 12, "timeoutMs": 180000 }
+                     "maxSteps": 12, "timeoutMs": 180000 },
+        "control": { "verify": false }
       }
     }
   ]
@@ -59,6 +61,8 @@ Zero config works once the env var is set. Main options:
 - `browser.uvPath` — `uv` binary used to launch the loop (default `uv`).
 - `browser.maxSteps` — default action budget per task (default 12, ceiling 60).
 - `browser.timeoutMs` — wall-clock cap on one task (default 180000).
+- `control.verify` — verification-gate hint before a completion claim (default false; see
+  "Verification gate").
 
 ## Browser tasks
 
@@ -97,6 +101,21 @@ A stopped run is not a failed one: `status: "blocked"` and a `DONE` both come fr
 model, so the trace is a report, not proof. Verify the outcome before reporting success, and
 never retry a browser mutation blindly.
 
+## Verification gate
+
+With `control.verify` on, when mid-loop assistant text claims a task is done, Jev decides whether
+a check has actually **passed**; when it has not, one hint is injected telling the model to run
+the relevant check or state explicitly that none exists. It never blocks.
+
+OpenCode exposes no post-response hook, so a claim that ends the turn is never intercepted — only
+mid-loop claims are. Measured 2026-09-23 on `fixtures/verify-eval/cases.jsonl` (15 cases: 6 false
+dones, 5 true dones, 4 not-done states): hit 11 (73.3%), missed 3 (false dones the gate skipped —
+a bare "all tests pass" with no evidence, a claim whose evidence is a failing test, and a claim
+whose evidence is a stale pre-change run), false-hint 1 (a docs-only change that already stated
+no check applies). It fails its ≥80% hit bar, so it **ships off**; the fix — split the check into
+`check::ran` + `check::passed` and re-measure — is recorded in
+[`docs/superpowers/specs/2026-09-23-jev-decision-portfolio-design.md`](docs/superpowers/specs/2026-09-23-jev-decision-portfolio-design.md).
+
 ## Skill decision quality (L1)
 
 The shipped skill decision is measured against real skills, not invented ones: 64 cases (44
@@ -115,12 +134,21 @@ latency avg 613 ms / max 1252 ms | tokens in 113748 out 18534 | est cost $0.0048
 reference bar (TypeSafe cookbook): agent-alone 16.8% wrong / 9.8% spurious; with suggestion 7.3% / 4.0%
 ```
 
+```text
+wave 2, 5 s timeout + transport-as-skip: hit 52 (81.3%) | spurious 6 (9.4%) | missed 6 (9.4%)
+```
+
 Run 2026-09-23 against `~typesafe/jev-latest`, $0.0048 total. Raw per-case results stay under
 `.superpowers/skill-l1/` (gitignored).
 
-Reading: zero wrong picks; the 7 misses are advisory skills the gate turns away (brainstorming,
-planning, parallel dispatch, skill discovery), and the 6 spurious picks are generic edit/run
-requests that `ponytail`'s "use on any coding task" description attracts.
+Wave 2: two of the wave-1 "misses" were 1 s transport timeouts, not gate rejections — the runner
+now counts a no-token null as a skip and takes `--timeout-ms`. No threshold or question separates
+the real misses (gate means 0.12–0.28) from the spurious set (0.39–0.88): the fix is a
+creative/advisory-work signal, not a knob. Tightening `ponytail`'s description changed 0 of 64
+decisions — once the gate is open the ranker has no "none" option and returns the least-bad
+skill, so the fix is a rank-time "does any skill fit?" question. Roadmap and measurement
+protocol: [`docs/superpowers/specs/2026-09-23-jev-decision-portfolio-design.md`](docs/superpowers/specs/2026-09-23-jev-decision-portfolio-design.md).
+The Hermes adapter's L1 numbers (78-skill roster) are in [`adapters/hermes/README.md`](adapters/hermes/README.md).
 
 ## Data egress
 

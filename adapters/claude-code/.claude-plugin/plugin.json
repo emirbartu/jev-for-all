@@ -1,0 +1,5 @@
+{
+  "name": "system-one",
+  "description": "Jev-routed skill selection: at most one skill is injected per prompt, and the Skill tool is denied when no skill applies.",
+  "version": "0.1.0"
+}

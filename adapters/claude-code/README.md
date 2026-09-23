@@ -1,0 +1,75 @@
+# system-one for Claude Code
+
+Jev-routed skill selection for Claude Code. On every `UserPromptSubmit` the plugin asks
+[Jev](https://docs.typesafe.ai) whether the prompt needs a skill; if one fits, its body is
+injected as `additionalContext`, otherwise a short "skills are routed externally" note is
+injected and the `Skill` tool is denied in that session.
+
+**Harness ceiling.** Claude Code hooks can inject context and deny a tool call. They cannot
+filter the tool catalog or rewrite the system prompt, so the skill list stays visible and the
+denial only covers `Skill` after Jev explicitly answered "none" — this plugin cannot do what
+the OpenCode adapter does for tool routing.
+
+## Install
+
+```bash
+claude --plugin-dir /home/gerius/Desktop/jev-for-all/adapters/claude-code
+```
+
+This is per-invocation only; nothing is written to your Claude Code configuration.
+
+## Environment
+
+| Variable | Meaning |
+| --- | --- |
+| `OPENROUTER_API_KEY` | Required. Without it the hook stays inert (exits 0, no output). |
+| `SYSTEM_ONE_SERVER_URL` | Optional. Override the decisions endpoint (tests/proxies). |
+| `SYSTEM_ONE_SKILL_DIRS` | Optional. Colon-separated skill directories; replaces the default roster source. |
+| `SYSTEM_ONE_STATE_DIR` | Optional. Per-session state and decision log directory. |
+
+## Roster
+
+By default the roster is scanned from `~/.claude/skills` and `<cwd>/.claude/skills`. Skills
+provided by plugins are not scanned. `SYSTEM_ONE_SKILL_DIRS` replaces both defaults when set.
+
+## What it injects
+
+- Jev picked a skill: the skill body (capped at 8000 chars; past the cap, a pointer to the
+  `SKILL.md` path) as `additionalContext`.
+- Jev answered "none": the fixed line `Skills are routed externally for this session; do not
+  call the Skill tool.`, and `Skill` calls in that session are denied with the same reason
+  until the next prompt overwrites the decision.
+- Transport error, low confidence, no API key, malformed stdin, empty roster: nothing is
+  printed and the hook exits 0.
+
+## Decision log
+
+Every Jev call appends one JSON line to `$SYSTEM_ONE_STATE_DIR/decisions.jsonl` when
+`SYSTEM_ONE_STATE_DIR` is set, otherwise to
+`${CLAUDE_PLUGIN_DATA:-${TMPDIR:-/tmp}}/system-one-cc/decisions.jsonl`. The line records the
+chosen skill (or `none` / `no-change`), the resolved model id, token usage, latency, and the
+per-session call count.
+
+## Data egress
+
+The `UserPromptSubmit` hook sends the prompt text and the skill roster (names, ids,
+descriptions) to OpenRouter's decisions endpoint. The injected skill body stays local. No
+other data leaves the machine; logging is local-only.
+
+## Fail-open
+
+The hook never throws out of a hook and never changes the request on failure. A missing API
+key, a transport error, a malformed answer, an unknown skill id, a low-confidence answer, or
+an expired session state all leave Claude Code's behavior exactly as it was.
+
+## Proof
+
+```bash
+# 1. unit + conformance
+bun test adapters/claude-code/system-one.test.ts
+bun adapters/claude-code/conformance.ts
+
+# 2. live smoke (needs OPENROUTER_API_KEY): run one prompt, then read the decision log
+claude --plugin-dir /home/gerius/Desktop/jev-for-all/adapters/claude-code -p "build me a deck"
+cat "${CLAUDE_PLUGIN_DATA:-/tmp}/system-one-cc/decisions.jsonl"
+```

@@ -69,10 +69,12 @@ export interface ToolPolicy {
 export interface ControlPolicy {
   verify: boolean
   claimMin: number
-  checkMax: number
+  ranMin: number
+  passMin: number
   questions: {
     claim: string
-    check: string
+    checkRan: string
+    checkPassed: string
   }
   hint: string
 }

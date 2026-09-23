@@ -1052,31 +1052,60 @@ test("latestAssistantText returns the newest assistant text", () => {
   expect(latestAssistantText([{ role: "user", content: [{ type: "text", text: "hi" }] }])).toBe("")
 })
 
-test("decideVerification hints only on an unverified claim", async () => {
-  const claimed = stubAsk({
+test("decideVerification hints unless a check ran and passed", async () => {
+  const noRun = stubAsk({
     "control::claim": { type: "noul", noul: 0.9 },
-    "control::check": { type: "noul", noul: 0.1 },
+    "control::ran": { type: "noul", noul: 0.1 },
+    "control::passed": { type: "noul", noul: 0.1 },
   })
-  const hint = await decideVerification(claimed.ask, { messages: claimMessages("Done — everything works.") })
-  expect(hint?.hint).toBe(policy.control.hint)
+  expect((await decideVerification(noRun.ask, { messages: claimMessages("Done — everything works.") }))?.hint).toBe(
+    policy.control.hint,
+  )
 
-  const verified = stubAsk({
+  const redRun = stubAsk({
     "control::claim": { type: "noul", noul: 0.9 },
-    "control::check": { type: "noul", noul: 0.9 },
+    "control::ran": { type: "noul", noul: 0.9 },
+    "control::passed": { type: "noul", noul: 0.1 },
   })
   expect(
-    await decideVerification(verified.ask, { messages: claimMessages("Done. Tests pass.", "42 pass, 0 fail") }),
+    await decideVerification(redRun.ask, { messages: claimMessages("Done.", "1 failing test: expected 3 rows, got 2") }),
+  ).not.toBeNull()
+
+  const staleRun = stubAsk({
+    "control::claim": { type: "noul", noul: 0.9 },
+    "control::ran": { type: "noul", noul: 0.9 },
+    "control::passed": { type: "noul", noul: 0.3 },
+  })
+  expect(
+    await decideVerification(staleRun.ask, { messages: claimMessages("Done.", "3 pass, 0 fail (old suite, pre-change)") }),
+  ).not.toBeNull()
+
+  const greenRun = stubAsk({
+    "control::claim": { type: "noul", noul: 0.9 },
+    "control::ran": { type: "noul", noul: 0.9 },
+    "control::passed": { type: "noul", noul: 0.9 },
+  })
+  expect(
+    await decideVerification(greenRun.ask, { messages: claimMessages("Done. Tests pass.", "42 pass, 0 fail") }),
   ).toBeNull()
 
   const notClaimed = stubAsk({
     "control::claim": { type: "noul", noul: 0.1 },
-    "control::check": { type: "noul", noul: 0.1 },
+    "control::ran": { type: "noul", noul: 0.1 },
+    "control::passed": { type: "noul", noul: 0.1 },
   })
   expect(await decideVerification(notClaimed.ask, { messages: claimMessages("Working on it.") })).toBeNull()
 
   const noPattern = stubAsk({})
   expect(await decideVerification(noPattern.ask, { messages: claimMessages("Implementing now.") })).toBeNull()
   expect(noPattern.calls.length).toBe(0)
+
+  const malformed = stubAsk({
+    "control::claim": { type: "noul", noul: 0.9 },
+    "control::ran": { type: "noul", noul: "high" },
+    "control::passed": { type: "noul", noul: 0.1 },
+  })
+  expect(await decideVerification(malformed.ask, { messages: claimMessages("Done.") })).toBeNull()
 })
 
 test("decideVerification fails open on transport errors", async () => {
@@ -1094,7 +1123,8 @@ test("the verification hook appends the hint only for an unverified claim", asyn
     body: {
       answers: {
         "control::claim": { type: "noul", noul: 0.9 },
-        "control::check": { type: "noul", noul: 0.1 },
+        "control::ran": { type: "noul", noul: 0.1 },
+        "control::passed": { type: "noul", noul: 0.1 },
       },
       model: "~typesafe/jev-latest",
       usage: { input_tokens: 1, output_tokens: 1 },
@@ -1130,7 +1160,8 @@ test("the verification hook appends the hint only for an unverified claim", asyn
       body: {
         answers: {
           "control::claim": { type: "noul", noul: 0.9 },
-          "control::check": { type: "noul", noul: 0.9 },
+          "control::ran": { type: "noul", noul: 0.9 },
+          "control::passed": { type: "noul", noul: 0.9 },
         },
         model: "~typesafe/jev-latest",
         usage: { input_tokens: 1, output_tokens: 1 },

@@ -53,24 +53,27 @@ export function renderVerifyState(messages: readonly VerifyMessage[], budget = 2
 
 export async function decideVerification(
   ask: Ask,
-  input: { messages: readonly VerifyMessage[]; config?: { claimMin?: number; checkMax?: number } },
+  input: { messages: readonly VerifyMessage[]; config?: { claimMin?: number; ranMin?: number; passMin?: number } },
 ): Promise<{ hint: string } | null> {
   const claimMin = input.config?.claimMin ?? policy.control.claimMin
-  const checkMax = input.config?.checkMax ?? policy.control.checkMax
+  const ranMin = input.config?.ranMin ?? policy.control.ranMin
+  const passMin = input.config?.passMin ?? policy.control.passMin
   if (!looksLikeClaim(latestAssistantText(input.messages))) return null
   try {
     const answers = await ask({
       state: { tail: renderVerifyState(input.messages) },
       questions: {
         "control::claim": { type: "noul", instructions: policy.control.questions.claim },
-        "control::check": { type: "noul", instructions: policy.control.questions.check },
+        "control::ran": { type: "noul", instructions: policy.control.questions.checkRan },
+        "control::passed": { type: "noul", instructions: policy.control.questions.checkPassed },
       },
     })
     const claim = asNoul(answers["control::claim"])
-    const check = asNoul(answers["control::check"])
-    if (!claim || !check) return null
+    const ran = asNoul(answers["control::ran"])
+    const passed = asNoul(answers["control::passed"])
+    if (!claim || !ran || !passed) return null
     if (claim.noul < claimMin) return null
-    if (check.noul > checkMax) return null
+    if (ran.noul >= ranMin && passed.noul >= passMin) return null
     return { hint: policy.control.hint }
   } catch {
     return null

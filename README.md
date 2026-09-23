@@ -136,8 +136,8 @@ OPENROUTER_API_KEY=... bun scripts/jev-probe.ts decisions  # live Jev smoke test
 ## Status
 
 Skill and tool routing are shipped and measured. The verification gate is built and measured
-(73.3% hit on 15 cases) and ships off (`control.verify`) until it passes its bar. Next: the
-routing-quality design pass.
+(80.0% hit on 15 cases, clearing its bar) and still ships off (`control.verify`) pending an L2
+run. Next: the routing-quality design pass.
 
 ---
 

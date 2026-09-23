@@ -36,10 +36,12 @@
   "control": {
     "verify": false,
     "claimMin": 0.5,
-    "checkMax": 0.5,
+    "ranMin": 0.5,
+    "passMin": 0.5,
     "questions": {
       "claim": "Does the latest assistant message assert that the work is complete, done, or finished?",
-      "check": "Has an automated check (tests, build, lint, or a re-read of the changed artifact) been run against this change in this session?"
+      "checkRan": "Has an automated check (tests, build, lint, or a re-read of the changed artifact) been run against this change in this session?",
+      "checkPassed": "Did that check pass? Count failing, incomplete, or stale pre-change runs as not passed."
     },
     "hint": "<system_one_control>\nBefore finishing: run the relevant check for this change, or state explicitly that no check exists. Do not claim completion without evidence.\n</system_one_control>"
   },

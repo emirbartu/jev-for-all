@@ -2,6 +2,7 @@ import { Plugin } from "@opencode/plugin"
 import { createJev, type Ask } from "./src/jev"
 import { applySkillDecision, defaultSkillRouting, selectSkill, type SkillRoutingConfig } from "./src/skills"
 import { createRecorder, summarize, type UsageSample } from "./src/observe"
+import { browserTool, defaultBrowser, type BrowserConfig } from "./src/browser"
 import {
   applyToolDecision,
   defaultToolRouting,
@@ -35,6 +36,7 @@ export interface ResolvedOptions {
   skills: ResolvedSkills
   tools: ResolvedTools
   observe: ResolvedObserve
+  browser: BrowserConfig
 }
 
 export function readOptions(raw: Record<string, unknown>): ResolvedOptions {
@@ -68,6 +70,13 @@ export function readOptions(raw: Record<string, unknown>): ResolvedOptions {
   }
   const agents = strings("agents", raw.agents, [])
   const observe = (raw.observe ?? {}) as Record<string, unknown>
+  const browser = (raw.browser ?? {}) as Record<string, unknown>
+  const text = (key: string, value: unknown, fallback: string) => {
+    if (value === undefined) return fallback
+    if (typeof value === "string" && value.trim()) return value
+    warn(key, fallback)
+    return fallback
+  }
 
   return {
     apiKey: typeof raw.apiKey === "string" ? raw.apiKey : undefined,
@@ -107,6 +116,14 @@ export function readOptions(raw: Record<string, unknown>): ResolvedOptions {
       enabled: bool("observe.enabled", observe.enabled, false),
       file: typeof observe.file === "string" ? observe.file : undefined,
       retain: number("observe.retain", observe.retain, 20),
+    },
+    browser: {
+      enabled: bool("browser.enabled", browser.enabled, defaultBrowser.enabled),
+      jevDir: text("browser.jevDir", browser.jevDir, defaultBrowser.jevDir),
+      envFile: text("browser.envFile", browser.envFile, defaultBrowser.envFile),
+      uvPath: text("browser.uvPath", browser.uvPath, defaultBrowser.uvPath),
+      timeoutMs: number("browser.timeoutMs", browser.timeoutMs, defaultBrowser.timeoutMs),
+      maxSteps: number("browser.maxSteps", browser.maxSteps, defaultBrowser.maxSteps),
     },
   }
 }
@@ -165,11 +182,9 @@ export default Plugin.define({
     const apiKey = options.apiKey ?? process.env.OPENROUTER_API_KEY
     const routing = options.skills.enabled || options.tools.enabled
     if (!apiKey) {
-      if (routing) {
-        console.warn("[system-one] disabled: set options.apiKey or OPENROUTER_API_KEY")
-        return
-      }
-      if (!options.observe.enabled) return
+      if (routing) console.warn("[system-one] routing disabled: set options.apiKey or OPENROUTER_API_KEY")
+      // browser_task spawns its own process and reads its own credentials, so it survives a missing key.
+      if (!options.observe.enabled && !options.browser.enabled) return
     }
     const ask = apiKey
       ? createJev({ apiKey, model: options.model, timeoutMs: options.timeoutMs, serverURL: options.serverURL })
@@ -270,6 +285,16 @@ export default Plugin.define({
         }
       }),
     ]
+
+    if (options.browser.enabled) {
+      registrations.push(
+        await ctx.tool.transform((editor) => {
+          // The tool's input is a plain JSON Schema; importing effect's Tool.ValueSchema for it is not worth it.
+          editor.add(browserTool({ config: options.browser, log }) as never)
+        }),
+      )
+      log("browser tool registered", options.browser.jevDir)
+    }
 
     return async () => {
       observeAbort.abort()

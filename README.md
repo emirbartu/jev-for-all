@@ -31,7 +31,9 @@ catalog, no tool-choice reasoning, and more reliable skill loads.
                     "needsToolThreshold": 0.3, "minConfidence": 0.3,
                     "alwaysVisible": ["read","write","edit","bash","grep","glob"],
                     "stateBudget": 6000 },
-        "observe": { "enabled": false, "file": "/tmp/system-one-usage.jsonl", "retain": 20 }
+        "observe": { "enabled": false, "file": "/tmp/system-one-usage.jsonl", "retain": 20 },
+        "browser": { "enabled": false, "jevDir": "~/jev-ultrafast",
+                     "maxSteps": 12, "timeoutMs": 180000 }
       }
     }
   ]
@@ -51,6 +53,49 @@ Zero config works once the env var is set. Main options:
 - `observe.enabled` — record per-message usage (default false).
 - `observe.file` — JSONL path for usage records (optional; nothing written when unset).
 - `observe.retain` — in-memory session cap for usage dedupe (default 20).
+- `browser.enabled` — register the `browser_task` tool (default false; see below).
+- `browser.jevDir` — jev-ultrafast checkout to run (default `~/jev-ultrafast`; `~` is expanded).
+- `browser.envFile` — `.env` holding the jev credentials, relative to `jevDir` (default `.env`).
+- `browser.uvPath` — `uv` binary used to launch the loop (default `uv`).
+- `browser.maxSteps` — default action budget per task (default 12, ceiling 60).
+- `browser.timeoutMs` — wall-clock cap on one task (default 180000).
+
+## Browser tasks
+
+With `browser.enabled`, the plugin registers one tool, `browser_task`. Give it a goal and a
+URL; it runs the jev-ultrafast loop as a subprocess and returns the final URL, the page title
+and the action trace.
+
+The coding agent does **not** choose the clicks. Inside the loop a hosted Jev policy model
+picks every operation and target, and only a `TYPE_TEXT` step calls a text model, so a task
+costs about **$0.00003 per decision** (a five-step task is well under a cent). That is the
+whole reason the tool exists: the agent states a goal and verifies the outcome instead of
+scripting selectors.
+
+Prerequisites, all outside this plugin:
+
+1. A checkout of `browser-use/jev-ultrafast` with its own `.env` (see that repo's `FORK.md`
+   for the OpenRouter-backed policy). It is **the checkout's** credentials that are used, not
+   this plugin's `apiKey`.
+2. `uv` on `PATH`.
+3. A Chromium-family browser connected through browser-harness over CDP. Flatpak Chromium
+   never writes `DevToolsActivePort`, so seed the daemon once with an explicit endpoint:
+
+   ```bash
+   flatpak run org.chromium.Chromium \
+     --user-data-dir="$HOME/.var/app/org.chromium.Chromium/config/jev-profile" \
+     --remote-debugging-port=9222
+   cd ~/jev-ultrafast && BU_CDP_WS=$(curl -s http://127.0.0.1:9222/json/version |
+     python3 -c 'import sys,json;print(json.load(sys.stdin)["webSocketDebuggerUrl"])') \
+     uv run browser-harness <<<'print(page_info().get("title"))'
+   ```
+
+   The daemon keeps the connection, so the tool needs no environment of its own after that.
+   Without a browser the tool still returns a readable failure rather than throwing.
+
+A stopped run is not a failed one: `status: "blocked"` and a `DONE` both come from the policy
+model, so the trace is a report, not proof. Verify the outcome before reporting success, and
+never retry a browser mutation blindly.
 
 ## Data egress
 
@@ -62,6 +107,14 @@ catalog's names and descriptions. Tool input schemas are not sent. Nothing is se
 API key is configured or the plugin is disabled.
 
 There is no option to exclude tool-result bodies from the state today.
+
+`browser_task` adds a second, larger egress path, and only while it runs: the goal and start
+URL leave the machine, and for **every step** the loop sends the current page's URL, title,
+visible text, indexed controls and recent actions to the policy model. That is the page the
+browser is on, so anything rendered on that tab — including content behind a session you are
+already signed into — can be sent. No screenshots and no HTML are sent, only the extracted
+text and control list; a step that types a value also sends that field's meaning and page
+context to the text model. The trace and the cost figures stay local.
 
 Usage records are local numbers only (message counts, tokens, cache, cost) and are never
 uploaded.

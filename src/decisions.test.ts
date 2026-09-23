@@ -556,6 +556,207 @@ test("readOptions parses observe options", () => {
   const custom = readOptions({ observe: { enabled: true, file: "/tmp/u.jsonl", retain: 3 } })
   expect(custom.observe).toEqual({ enabled: true, file: "/tmp/u.jsonl", retain: 3 })
 })
+
+import {
+  browserTool,
+  buildRunnerCommand,
+  defaultBrowser,
+  parseRunnerOutput,
+  runBrowserTask,
+  STEP_CEILING,
+  type Spawn,
+} from "./browser"
+
+const HOME = process.env.HOME ?? ""
+
+function runLine(payload: Record<string, unknown>): string {
+  return `noise on stdout\nJEV_RESULT ${JSON.stringify(payload)}\n`
+}
+
+const doneLine = (extra: Record<string, unknown> = {}) =>
+  runLine({
+    ok: true,
+    status: "done",
+    url: "https://example.test/a",
+    title: "A",
+    steps: [{ step: 1, operation: "CLICK", action: "Go", url: "https://example.test/a", text: null }],
+    decisions: 2,
+    cost_usd: 0.000031,
+    elapsed_ms: 1200,
+    error: null,
+    ...extra,
+  })
+
+test("parseRunnerOutput reads the sentinel line and rejects junk", () => {
+  const run = parseRunnerOutput(doneLine())
+  expect(run?.ok).toBe(true)
+  expect(run?.url).toBe("https://example.test/a")
+  expect(run?.steps.length).toBe(1)
+  expect(run?.costUsd).toBe(0.000031)
+  expect(run?.elapsedMs).toBe(1200)
+  expect(run?.error).toBeUndefined()
+
+  expect(parseRunnerOutput("nothing to see")).toBeNull()
+  expect(parseRunnerOutput("JEV_RESULT {not json}")).toBeNull()
+  expect(parseRunnerOutput(`JEV_RESULT ${JSON.stringify({ status: "done" })}`)).toBeNull()
+})
+
+test("buildRunnerCommand pins uv at the jev checkout", () => {
+  const command = buildRunnerCommand({ ...defaultBrowser, jevDir: "~/jev-ultrafast" }, "/plugin/src/jev-runner.py")
+  expect(command).toEqual([
+    "uv",
+    "run",
+    "--directory",
+    `${HOME}/jev-ultrafast`,
+    "--env-file",
+    `${HOME}/jev-ultrafast/.env`,
+    "--quiet",
+    "python",
+    "/plugin/src/jev-runner.py",
+  ])
+
+  const absolute = buildRunnerCommand({ ...defaultBrowser, jevDir: "/opt/jev", envFile: "/etc/jev.env" }, "/r.py")
+  expect(absolute).toContain("/etc/jev.env")
+  expect(absolute).toContain("/opt/jev")
+})
+
+test("runBrowserTask passes the goal over env and reports the run", async () => {
+  const calls: Array<{ env: Record<string, string>; timeoutMs: number }> = []
+  const spawn: Spawn = async (_command, env, timeoutMs) => {
+    calls.push({ env, timeoutMs })
+    return { code: 0, stdout: doneLine(), stderr: "", timedOut: false }
+  }
+  const config = { ...defaultBrowser, timeoutMs: 5000 }
+  const { run } = await runBrowserTask({ goal: "  Find stays in Lisbon  ", max_steps: 999 }, config, spawn)
+  expect(calls[0].env.JEV_TASK_GOAL).toBe("Find stays in Lisbon")
+  expect(calls[0].env.JEV_TASK_URL).toBe("about:blank")
+  expect(calls[0].env.JEV_TASK_MAX_STEPS).toBe(String(STEP_CEILING))
+  expect(calls[0].timeoutMs).toBe(5000)
+  expect(run.ok).toBe(true)
+  expect(run.decisions).toBe(2)
+
+  const explicit: Array<Record<string, string>> = []
+  await runBrowserTask({ goal: "x", url: " https://a.test/ ", max_steps: 3 }, config, async (_c, env) => {
+    explicit.push(env)
+    return { code: 0, stdout: doneLine(), stderr: "", timedOut: false }
+  })
+  expect(explicit[0].JEV_TASK_URL).toBe("https://a.test/")
+  expect(explicit[0].JEV_TASK_MAX_STEPS).toBe("3")
+})
+
+test("runBrowserTask fails open on no result, timeout, spawn failure and no goal", async () => {
+  const noResult = await runBrowserTask(
+    { goal: "x" },
+    defaultBrowser,
+    async () => ({ code: 1, stdout: "", stderr: "daemon default didn't come up\n", timedOut: false }),
+  )
+  expect(noResult.run.ok).toBe(false)
+  expect(noResult.run.error).toContain("no result")
+  expect(noResult.run.error).toContain("daemon default")
+
+  const hung = await runBrowserTask({ goal: "x" }, defaultBrowser, async () => ({
+    code: null,
+    stdout: "",
+    stderr: "",
+    timedOut: true,
+  }))
+  expect(hung.run.error).toContain("timed out")
+
+  const threw = await runBrowserTask({ goal: "x" }, defaultBrowser, async () => {
+    throw new Error("ENOENT uv")
+  })
+  expect(threw.run.error).toContain("could not start")
+
+  const homeless = await runBrowserTask({}, defaultBrowser, async () => ({
+    code: 0,
+    stdout: "",
+    stderr: "",
+    timedOut: false,
+  }))
+  expect(homeless.run.error).toContain("needs a goal")
+})
+
+test("browserTool is goal-driven and formats its report", async () => {
+  const tool = browserTool({
+    config: { ...defaultBrowser, enabled: true },
+    spawn: async () => ({
+      code: 0,
+      stdout: runLine({
+        ok: false,
+        status: "blocked",
+        url: "https://example.test/list",
+        title: "Stays",
+        steps: [{ step: 1, operation: "CLICK", action: "View Casa Flora", url: "u", text: "Lisbon" }],
+        decisions: 5,
+        cost_usd: 0.0002,
+        elapsed_ms: 2600,
+        error: null,
+      }),
+      stderr: "",
+      timedOut: false,
+    }),
+  })
+  expect(tool.name).toBe("browser_task")
+  expect(tool.description).toContain("Jev")
+  expect((tool.input as { required: string[] }).required).toEqual(["goal"])
+
+  const result = await tool.execute({ goal: "Find a stay in Lisbon" })
+  expect(result.content).toContain("did not finish")
+  expect(result.content).toContain(`1. CLICK "View Casa Flora" = "Lisbon"`)
+  expect(result.content).toContain("$0.000200")
+  expect(result.metadata.status).toBe("blocked")
+  expect(result.metadata.steps).toBe(1)
+  expect(result.metadata.costUsd).toBe(0.0002)
+})
+
+test("readOptions parses browser options", () => {
+  const defaults = readOptions({})
+  expect(defaults.browser.enabled).toBe(false)
+  expect(defaults.browser.jevDir).toBe("~/jev-ultrafast")
+
+  const custom = readOptions({ browser: { enabled: true, jevDir: "/opt/jev", maxSteps: 4, timeoutMs: 9000 } })
+  expect(custom.browser).toEqual({
+    enabled: true,
+    jevDir: "/opt/jev",
+    envFile: ".env",
+    uvPath: "uv",
+    timeoutMs: 9000,
+    maxSteps: 4,
+  })
+})
+
+test("setup registers the browser tool only when enabled", async () => {
+  const plugin = (await import("../index")).default
+  const added: Array<{ name: string }> = []
+  let disposed = false
+  const cleanup = await plugin.setup({
+    options: { apiKey: "k", browser: { enabled: true, jevDir: "/tmp/jev" } },
+    session: { hook: () => Promise.resolve({ dispose: async () => {} }) },
+    tool: {
+      transform: async (callback: (editor: { add: (tool: { name: string }) => void }) => void) => {
+        callback({ add: (tool) => added.push(tool) })
+        return { dispose: async () => void (disposed = true) }
+      },
+    },
+  } as never)
+  expect(added.map((tool) => tool.name)).toEqual(["browser_task"])
+  await cleanup?.()
+  expect(disposed).toBe(true)
+
+  let transforms = 0
+  await plugin.setup({
+    options: { apiKey: "k" },
+    session: { hook: () => Promise.resolve({ dispose: async () => {} }) },
+    tool: {
+      transform: async () => {
+        transforms += 1
+        return { dispose: async () => {} }
+      },
+    },
+  } as never)
+  expect(transforms).toBe(0)
+})
+
 import { formatTemplate, policy } from "./policy"
 
 test("policy carries the shipped defaults verbatim", () => {

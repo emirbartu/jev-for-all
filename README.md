@@ -31,10 +31,12 @@ Or edit it yourself:
 // ~/.config/opencode/opencode.jsonc
 {
   "plugins": [
-    { "package": "/path/to/jev-for-all", "options": { "apiKey": "sk-or-..." } }
+    { "package": "jev-for-all", "options": { "apiKey": "sk-or-..." } }
   ]
 }
 ```
+
+A local clone path can be used instead when developing the plugin.
 
 Let your agent install it: point it at
 <https://raw.githubusercontent.com/emirbartu/jev-for-all/main/docs/install.md>.

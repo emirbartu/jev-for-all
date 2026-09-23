@@ -97,6 +97,31 @@ A stopped run is not a failed one: `status: "blocked"` and a `DONE` both come fr
 model, so the trace is a report, not proof. Verify the outcome before reporting success, and
 never retry a browser mutation blindly.
 
+## Skill decision quality (L1)
+
+The shipped skill decision is measured against real skills, not invented ones: 64 cases (44
+covered across all 22 skills in `~/.agents/skills`, 20 no-skill requests) run live through
+`selectSkill` and classified as hit / wrong-skill / spurious / missed.
+
+```bash
+OPENROUTER_API_KEY=... bun scripts/skill-l1.ts --roster ~/.agents/skills \
+  --cases fixtures/skill-eval/agents-skills-cases.jsonl
+```
+
+```text
+cases: 64 scored 64 skipped 0 | roster 22 | model ~typesafe/jev-latest
+hit 51 (79.7%) | wrong-skill 0 (0.0%) | spurious 6 (9.4%) | missed 7 (10.9%)
+latency avg 613 ms / max 1252 ms | tokens in 113748 out 18534 | est cost $0.0048
+reference bar (TypeSafe cookbook): agent-alone 16.8% wrong / 9.8% spurious; with suggestion 7.3% / 4.0%
+```
+
+Run 2026-09-23 against `~typesafe/jev-latest`, $0.0048 total. Raw per-case results stay under
+`.superpowers/skill-l1/` (gitignored).
+
+Reading: zero wrong picks; the 7 misses are advisory skills the gate turns away (brainstorming,
+planning, parallel dispatch, skill discovery), and the 6 spurious picks are generic edit/run
+requests that `ponytail`'s "use on any coding task" description attracts.
+
 ## Data egress
 
 On every model dispatch the `context` hook sends the **tail of the conversation** to

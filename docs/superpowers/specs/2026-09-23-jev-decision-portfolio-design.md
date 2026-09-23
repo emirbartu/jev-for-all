@@ -102,3 +102,30 @@ already write logs.
 | Cost overrun | `--max-usd` (default 0.10) stops the run; per-call cost estimate logged; expected spend ≤ 0.02 |
 | A misleading single run | Report records model, date, roster size, and case count; results are data, not claims, and the command is reproducible |
 | Ambiguous cases skew the wrong-skill rate | `acceptable` lists are explicit and kept small, each documented |
+
+## Wave 1 findings (2026-09-23)
+
+First live L1 run, 64 cases against the real 22-skill `~/.agents/skills` roster,
+`~typesafe/jev-latest`, $0.0048:
+
+```text
+hit 51 (79.7%) | wrong-skill 0 (0.0%) | spurious 6 (9.4%) | missed 7 (10.9%)
+latency avg 613 ms / max 1252 ms | tokens in 113748 out 18534
+```
+
+- **Zero wrong picks** in the entire run — better than the cookbook's with-suggestion bar
+  (7.3% wrong); the decision is not misrouting, it is declining.
+- **The misses are the gate's fault, not the ranker's.** All 7 misses returned no skill, and
+  they are advisory-but-procedural skills (brainstorming ×2, writing-plans, executing-plans,
+  dispatching-parallel-agents, find-skills, ponytail-gain). This is the Phase 2 "gate fix"
+  problem, now with numbers behind it.
+- **The spurious picks are a description attractor.** Five of six were small tool-only edits
+  (rename a variable, bump a version, add a `.gitignore` line, read a file, delete an import)
+  routed to `ponytail`, whose description says "Use on ANY coding task"; the sixth was
+  "run bun test" → verification-before-completion. Tightening that description (or excluding
+  tool-only asks at the gate) is a candidate change, not made here.
+- **Hermes's real roster is unreachable by the shipped adapter.** Real skills are nested
+  (`~/.hermes/skills/<category>/<skill>/SKILL.md`, 76 files); the adapter scans one level and
+  finds 2. Its real-home `decisions.jsonl` therefore logs decisions over almost no roster.
+  Fix candidate for a later wave; not touched here.
+

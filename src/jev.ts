@@ -22,6 +22,7 @@ export interface JevOptions {
   model?: string
   serverURL?: string
   timeoutMs?: number
+  onMeta?: (meta: { model?: string; inputTokens?: number; outputTokens?: number }) => void
 }
 
 export class JevError extends Error {
@@ -58,6 +59,13 @@ export function createJev(options: JevOptions): Ask {
     }
     const answers = response?.answers
     if (!answers || typeof answers !== "object") throw new JevError("system-one response missing answers")
+    const resolved = (response as { model?: unknown }).model
+    const usage = (response as { usage?: { inputTokens?: unknown; outputTokens?: unknown } }).usage
+    options.onMeta?.({
+      model: typeof resolved === "string" ? resolved : undefined,
+      inputTokens: typeof usage?.inputTokens === "number" ? usage.inputTokens : undefined,
+      outputTokens: typeof usage?.outputTokens === "number" ? usage.outputTokens : undefined,
+    })
     return answers as Answers
   }
 }

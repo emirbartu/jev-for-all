@@ -793,3 +793,33 @@ test("tool criteria use the contract wording and fallback", async () => {
     long: "d".repeat(300),
   })
 })
+
+test("createJev reports the resolved model and usage through onMeta", async () => {
+  const mock = mockJevServer(() => ({
+    body: {
+      answers: { which: { type: "choice", choice: "read", probabilities: { read: 1 }, confidence: 1 } },
+      model: "~typesafe/jev-1.13.0",
+      usage: { input_tokens: 123, output_tokens: 7 },
+    },
+  }))
+  try {
+    const seen: Array<{ model?: string; inputTokens?: number; outputTokens?: number }> = []
+    const ask = createJev({ apiKey: "k", serverURL: mock.serverURL, onMeta: (meta) => seen.push(meta) })
+    await ask({ state: { request: "hi" }, questions: {} })
+    expect(seen).toEqual([{ model: "~typesafe/jev-1.13.0", inputTokens: 123, outputTokens: 7 }])
+  } finally {
+    mock.server.stop(true)
+  }
+})
+
+test("createJev does not call onMeta on a failed request", async () => {
+  const mock = mockJevServer(() => ({ status: 500, body: { error: { message: "boom" } } }))
+  try {
+    let called = 0
+    const ask = createJev({ apiKey: "k", serverURL: mock.serverURL, onMeta: () => (called += 1) })
+    await expect(ask({ state: {}, questions: {} })).rejects.toThrow()
+    expect(called).toBe(0)
+  } finally {
+    mock.server.stop(true)
+  }
+})

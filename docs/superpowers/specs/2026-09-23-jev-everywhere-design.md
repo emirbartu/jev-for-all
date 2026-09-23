@@ -1,7 +1,7 @@
 # Jev Everywhere — Cross-Harness System One Design
 
 Date: 2026-09-23
-Status: approved in chat, pending spec review
+Status: approved in chat; open questions resolved 2026-09-23
 
 ## Goal
 
@@ -36,7 +36,7 @@ observation, `browser_task`) is shipped; Phases 2–6 live in
   context; a `Skill` tool call can be denied in `PreToolUse`.
 - Skill rosters: `~/.claude/skills/` and `.claude/skills/` are filesystem-readable; on this
   machine the user skills directory is empty. Plugin-provided skills live inside plugin
-  caches and are not enumerable by a fixed glob (open question 1).
+  caches and are not enumerable by a fixed glob (resolved decision 1).
 - Headless runs (`claude -p`) exist for behavioral eval.
 
 **Hermes** (local checkout `~/.hermes/hermes-agent`; our plugin `ourines/hermes-jev` v0.1.2):
@@ -101,7 +101,8 @@ opencode-system-one/
 Boundaries:
 
 - `src/` is the TS core plus the OpenCode adapter's hook wiring. Moving OpenCode code into
-  `adapters/opencode/` is a later mechanical cleanup (open question 6), not part of Phase A.
+  `adapters/opencode/` is a later mechanical cleanup (resolved decision 6), not part of
+  Phase A.
 - `adapters/*` never import from each other. Shared behavior flows through
   `spec/decisions.json` and `fixtures/`, not through cross-imports.
 - **Distribution** (approved defaults): Claude Code via
@@ -128,10 +129,12 @@ Boundaries:
   Tool-decision cases join the same file in Phase D.
 - **Decision log** (append-only JSONL, local): `{ kind: "decision", harness, sessionID,
   hook, chosen, confidence?, probabilities?, tokens, latencyMs, model, time }`. One format
-  for every adapter; a report script aggregates. `parseSamples` ignores non-`usage` kinds,
-  so this is additive to the existing observe file.
+  for every adapter; a report script aggregates. `model` records the resolved versioned id
+  Jev reports on every call, so alias drift is visible. `parseSamples` ignores non-`usage`
+  kinds, so this is additive to the existing observe file.
 - **Spend guard**: each adapter counts Jev calls per session and stops calling (fails open)
-  past the cap; the cap and the running token estimate are logged once per session.
+  past the cap. Default cap: 500 calls/session, with a warning logged at 80%. The cap exists
+  to stop a runaway hook loop, not to ration normal long sessions.
 
 ### Per-harness mapping
 
@@ -276,29 +279,27 @@ decision fixes — the same rule as every other phase.
 | Risk | Mitigation |
 | --- | --- |
 | Two ports drift | fixtures + conformance in both languages; `spec/decisions.json` is the only threshold source |
-| CC roster cannot see plugin-provided skills | open question 1; default is configured dirs, registry escape hatch |
+| CC roster cannot see plugin-provided skills | resolved decision 1: configured dirs only; an explicit registry is added only if a real gap bites |
 | `additionalContext` read as a system command and surfaced to the user | factual phrasing, not imperative system instructions (per CC docs) |
 | Hermes cache invariant violated | hint-only; no toolset or system-prompt mutation |
 | Spend runaway | per-session cap + decision log; ~$0.00006 per Jev call |
 | `UserPromptSubmit` hook stalls the session | 1 s Jev timeout, no retries, fail-open; CC cancels the hook at its own timeout |
 | Distribution drift (bundled plugin copies) | bundle step + a publish script per adapter, added with distribution, not before |
 
-## Open questions (for spec review)
+## Resolved decisions (2026-09-23)
 
-1. **CC roster source for plugin-provided skills.** Default: scan configured dirs only
-   (`~/.claude/skills`, `.claude/skills`); add an explicit registry if the gap bites.
-2. **Skill body injection cap.** Default 8000 chars, else inject the skill path plus a
-   one-line summary. Confirm.
-3. **Hermes "no skill" authority.** Injection only — is a strong line enough, or should the
-   adapter try harder (e.g. naming the skill index in the injected line)? Current answer:
-   line only.
-4. **Jev model pinning.** Keep `~typesafe/jev-latest`, or pin `jev-1.13` (the Hermes plugin
-   docs warn about moving aliases)? Default: keep the alias, revisit at the first
-   behavioral eval.
-5. **Per-session call cap default.** Proposal: 100 calls/session (~$0.006 at current Jev
-   pricing).
-6. **Physical `src/` → `adapters/opencode/` move.** Deferred; it breaks current import
-   paths and tests for no functional gain.
+1. **CC roster source: configured dirs only** (`~/.claude/skills`, `.claude/skills`). Plugin
+   caches are not enumerable; an explicit registry is added only if a real gap bites in use.
+2. **Skill body injection cap: 8000 chars**, else inject the skill path plus a one-line
+   summary. Keeps injected context bounded without losing the pointer to the full skill.
+3. **Hermes "no skill" authority: injection-only, accepted.** Breaking the prompt-cache
+   invariant for a hint is not worth it; revisit only if an eval shows it failing.
+4. **Jev model: keep `~typesafe/jev-latest`**, with the resolved versioned id logged in the
+   decision log on every call so alias drift is visible. Pin only if the first behavioral
+   eval shows it matters.
+5. **Per-session call cap: 500**, warning at 80%. The cap exists to stop a runaway hook
+   loop, not to ration normal long sessions.
+6. **`src/` → `adapters/opencode/` move: stays deferred.** No file moves for aesthetics.
 
 ## Sequencing
 

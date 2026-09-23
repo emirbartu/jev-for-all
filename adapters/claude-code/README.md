@@ -50,12 +50,34 @@ Every Jev call appends one JSON line to `$SYSTEM_ONE_STATE_DIR/decisions.jsonl` 
 chosen skill (or `none` / `no-change`), the resolved model id, token usage, latency, and the
 per-session call count.
 
+## Browser tasks (MCP)
+
+The plugin ships `.mcp.json`, so the same session also exposes `browser_task` — one
+natural-language goal in a real browser, with a Jev policy model choosing every click. The
+server lives in the sibling adapter and is spawned per session as:
+
+```text
+uv run --no-project --with mcp python ${CLAUDE_PLUGIN_ROOT}/../browser-mcp/server.py
+```
+
+`BROWSER_MCP_JEV_DIR` defaults to `~/jev-ultrafast`, and the loop's credentials come from that
+checkout's `.env`. The bundled `browser-task` skill tells Claude when the tool is the right move
+and requires an outcome check before reporting success.
+
+Two harness truths: MCP tools are model-invoked, so `browser_task` appears in the catalog and
+Claude decides when to call it — the skill guides that choice rather than enforcing it. And the
+returned trace is a report, not proof.
+
 ## Data egress
 
 The `UserPromptSubmit` hook sends the prompt text, the skill roster (names, ids,
 descriptions), and, when rerank runs, the first 700 characters of each shortlisted skill's
 body to OpenRouter's decisions endpoint. The injected skill body stays local. No other data
 leaves the machine; logging is local-only.
+
+`browser_task` adds its own, larger egress path while it runs: the goal, start URL and every
+step's page state (URL, title, visible text, controls) go to the policy model; the trace and
+cost figures stay local. See `adapters/browser-mcp/README.md` for details.
 
 ## Fail-open
 

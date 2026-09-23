@@ -128,6 +128,24 @@ class DecisionTest(unittest.TestCase):
         self.assertEqual(meta["model"], "~typesafe/jev-1.13.0")
         self.assertEqual(meta["input_tokens"], 12)
 
+    def test_unparseable_first_answer_is_no_change(self):
+        roster = [{"id": "a", "name": "A", "description": "Does A", "content": "body"}]
+        ask, _ = stub_ask({})
+        self.assertEqual(decision.decide(ask, "do A", roster), ("no-change", None))
+
+        ask, _ = stub_ask({"which": {"type": "choice", "choice": 7}, **OPEN_GATE})
+        self.assertEqual(decision.decide(ask, "do A", roster), ("no-change", None))
+
+        ask, _ = stub_ask(
+            {
+                "which": {"type": "choice", "choice": "a", "probabilities": {"a": 0.9}, "confidence": 0.9},
+                "gate::acts": {"type": "noul"},
+                "gate::procedure": {"type": "noul", "noul": 0.8},
+                "gate::prose": {"type": "noul", "noul": 0.2},
+            }
+        )
+        self.assertEqual(decision.decide(ask, "do A", roster), ("no-change", None))
+
 
 class PluginRegistrationTest(unittest.TestCase):
     def test_register_wires_only_pre_llm_call_and_returns_context(self):

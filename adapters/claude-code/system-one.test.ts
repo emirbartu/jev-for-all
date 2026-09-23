@@ -103,6 +103,26 @@ test("decide returns no-change without an ask or a roster", async () => {
   expect(await decide(stubAsk({}).ask, "build me a deck", [])).toEqual({ kind: "no-change" })
 })
 
+test("decide returns no-change when the first answer is unparseable", async () => {
+  const roster = [{ id: "pptx-author", name: "pptx-author", description: "Author decks", content: "Use python-pptx" }]
+  expect(await decide(stubAsk({}).ask, "build me a deck", roster)).toEqual({ kind: "no-change" })
+  expect(
+    await decide(stubAsk({ which: { type: "choice", choice: 7 }, ...openGate }).ask, "build me a deck", roster),
+  ).toEqual({ kind: "no-change" })
+  expect(
+    await decide(
+      stubAsk({
+        which: { type: "choice", choice: "pptx-author", probabilities: { "pptx-author": 0.9 }, confidence: 0.9 },
+        "gate::acts": { type: "noul" },
+        "gate::procedure": { type: "noul", noul: 0.8 },
+        "gate::prose": { type: "noul", noul: 0.2 },
+      }).ask,
+      "build me a deck",
+      roster,
+    ),
+  ).toEqual({ kind: "no-change" })
+})
+
 test("injectionFor caps the body and points at the path past the cap", () => {
   const short = injectionFor({ id: "a", name: "Alpha", description: "Does alpha", content: "body", path: "/s/a/SKILL.md" })
   expect(short).toContain("Alpha (a)")

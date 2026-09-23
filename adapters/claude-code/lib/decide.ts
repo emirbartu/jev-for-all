@@ -1,4 +1,4 @@
-import { asChoice, type Ask } from "../../../src/jev"
+import { asChoice, asNoul, type Ask } from "../../../src/jev"
 import { policy } from "../../../src/policy"
 import { selectSkill, type SkillLike } from "../../../src/skills"
 import type { SkillFile } from "./roster"
@@ -16,21 +16,23 @@ export function injectionFor(skill: SkillFile): string {
 
 export async function decide(ask: Ask | undefined, request: string, skills: readonly SkillLike[]): Promise<Decision> {
   if (!ask || skills.length === 0 || request.trim() === "") return { kind: "no-change" }
-  let answered = false
-  let rankConfidence: number | undefined
+  let sawFirst = false
+  let confidentNone = false
   const tracked: Ask = async (input) => {
     const answers = await ask(input)
-    if (!answered) {
-      answered = true
-      rankConfidence = asChoice(answers[policy.skills.ids.rank])?.confidence
+    if (!sawFirst) {
+      sawFirst = true
+      const choice = asChoice(answers[policy.skills.ids.rank])
+      const gateIds = [policy.skills.ids.gateActs, policy.skills.ids.gateProcedure, policy.skills.ids.gateProse]
+      const gateOk = gateIds.every((id) => asNoul(answers[id]) !== null)
+      confidentNone = choice !== null && gateOk && (choice.confidence ?? 1) >= policy.skills.minConfidence
     }
     return answers
   }
   try {
     const decision = await selectSkill(tracked, { request, skills })
     if (decision) return { kind: "skill", id: decision.id }
-    const confident = (rankConfidence ?? 1) >= policy.skills.minConfidence
-    return answered && confident ? { kind: "none" } : { kind: "no-change" }
+    return confidentNone ? { kind: "none" } : { kind: "no-change" }
   } catch {
     return { kind: "no-change" }
   }

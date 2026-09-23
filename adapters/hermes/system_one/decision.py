@@ -26,9 +26,10 @@ def format_template(template: str, values: dict[str, str]) -> str:
 def as_choice(value: Any) -> dict | None:
     if not isinstance(value, dict) or value.get("type") != "choice" or not isinstance(value.get("choice"), str):
         return None
+    raw = value.get("probabilities")
     probabilities = {
         key: probability
-        for key, probability in (value.get("probabilities") or {}).items()
+        for key, probability in (raw if isinstance(raw, dict) else {}).items()
         if isinstance(probability, (int, float))
     }
     confidence = value.get("confidence")
@@ -178,14 +179,19 @@ def decide(ask: Ask | None, request: str, skills: Iterable[dict]) -> tuple[str, 
     roster = [skill for skill in skills if skill.get("id")]
     if ask is None or not roster or not request.strip():
         return ("no-change", None)
-    state = {"answered": False, "confidence": None}
+    ids = POLICY["skills"]["ids"]
+    state = {"seen": False, "confident_none": False}
 
     def tracked(st, questions):
         answers = ask(st, questions)
-        if not state["answered"]:
-            state["answered"] = True
-            choice = as_choice(answers.get(POLICY["skills"]["ids"]["rank"]))
-            state["confidence"] = choice["confidence"] if choice else None
+        if not state["seen"]:
+            state["seen"] = True
+            choice = as_choice(answers.get(ids["rank"]))
+            gate_ok = all(
+                as_noul(answers.get(ids[key])) is not None for key in ("gateActs", "gateProcedure", "gateProse")
+            )
+            confidence = choice["confidence"] if choice and choice["confidence"] is not None else 1
+            state["confident_none"] = bool(choice) and gate_ok and confidence >= POLICY["skills"]["minConfidence"]
         return answers
 
     try:
@@ -194,8 +200,7 @@ def decide(ask: Ask | None, request: str, skills: Iterable[dict]) -> tuple[str, 
         return ("no-change", None)
     if winner:
         return ("skill", winner)
-    confident = (state["confidence"] if state["confidence"] is not None else 1) >= POLICY["skills"]["minConfidence"]
-    return ("none", None) if state["answered"] and confident else ("no-change", None)
+    return ("none", None) if state["confident_none"] else ("no-change", None)
 
 
 def injection_for(skill: dict) -> str:

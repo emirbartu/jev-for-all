@@ -78,6 +78,11 @@ Install for use is a local path (`{ "package": "/abs/path/to/repo" }`); not publ
 Commits are authored as the repo's configured identity — `emirbartu <bartuekinci42@gmail.com>` —
 never overridden with an agent identity.
 
+## Releases
+
+Bump `version` in `package.json`, run `npm publish` (npm 2FA prompts for browser approval), then
+push `main`. npm package `jev-for-all`; npm user `emirb42`.
+
 ## Architecture
 
 | File | Responsibility |

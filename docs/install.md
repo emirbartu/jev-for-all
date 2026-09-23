@@ -6,6 +6,9 @@ One command registers the OpenCode plugin in the user's config:
 bunx jev-for-all install
 ```
 
+Or use the native manager: `opencode plugin add jev-for-all` writes `"plugins": ["jev-for-all"]`
+(it cannot add `options`; set `OPENROUTER_API_KEY`).
+
 - It writes this entry into `~/.config/opencode/opencode.jsonc` (or
   `$XDG_CONFIG_HOME/opencode/opencode.jsonc`), inserting it first in the `"plugins"` array:
 
@@ -28,10 +31,12 @@ bunx jev-for-all install
 ## Verify
 
 1. Restart OpenCode.
-2. The plugin loads with the session; with `"debug": true` in the options, routing decisions log
+2. `opencode plugin list` shows `jev-for-all`.
+3. The plugin loads with the session; with `"debug": true` in the options, routing decisions log
    to the console.
-3. `bunx jev-for-all install` again prints `already installed — nothing to do`.
+4. `bunx jev-for-all install` again prints `already installed — nothing to do`.
 
 ## Uninstall
 
-Remove the `jev-for-all` entry from the `"plugins"` array and restart OpenCode.
+Remove the `jev-for-all` entry from the `"plugins"` array and restart OpenCode. If it was added
+with the native manager, `opencode plugin remove jev-for-all` does the same.

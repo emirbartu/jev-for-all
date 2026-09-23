@@ -21,6 +21,10 @@ The installer writes the plugin block into your OpenCode config and prompts for 
 key ([create one](https://openrouter.ai/keys)); it is idempotent and leaves everything else in
 the file alone. Restart OpenCode — routing is on for every session.
 
+V2 also has a native manager: `opencode plugin add jev-for-all` writes a plain
+`"plugins": ["jev-for-all"]` entry. It cannot add `options`, so set `OPENROUTER_API_KEY` instead
+of `apiKey`.
+
 Or edit it yourself:
 
 ```jsonc

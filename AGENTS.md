@@ -75,6 +75,9 @@ deliberately not an option today.
 
 Install for use is a local path (`{ "package": "/abs/path/to/repo" }`); not published to npm.
 
+Commits are authored as the repo's configured identity — `emirbartu <bartuekinci42@gmail.com>` —
+never overridden with an agent identity.
+
 ## Architecture
 
 | File | Responsibility |

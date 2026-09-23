@@ -587,6 +587,27 @@ test("policy carries the shipped defaults verbatim", () => {
   })
   expect(policy.cache).toEqual({ max: 200, ttlMs: 600000 })
   expect(policy.spend).toEqual({ maxCallsPerSession: 500, warnAt: 0.8 })
+  expect(policy.skills.questions).toEqual({
+    rank: "Which of these skills, if any, is the right one to load to help with the user's latest request?",
+    rerank: "Exactly one of these skills is the right one to load for the user's latest request. Which one? Read what each actually does, not just its name.",
+    gateActs: "Is the assistant being asked to act on the user's files, accounts, devices, or online services, rather than only to explain or advise?",
+    gateProcedure: "Would a careful expert answering this consult a specific documented procedure or set of commands, rather than answering from general understanding?",
+    gateProse: "Could a knowledgeable generalist fully satisfy this request in prose, with no tools, no documentation, and no access to the user's files or accounts?",
+    fits: "Does the skill '{{name}}' do the specific thing the user's request asks for?",
+  })
+  expect(policy.tools.questions).toEqual({
+    next: "Which single tool is the best next step for the agent to make progress?",
+    needsTool: "Does making progress on the last step require calling a tool?",
+  })
+  expect(policy.tools.hints).toEqual({
+    open: "<system_one_routing>",
+    close: "</system_one_routing>",
+    noTool: "No tool is needed for this step; answer directly.",
+    start: "Start with: {{start}}.",
+    available: "Available now: {{tools}}.",
+    narrowed: "The tool list is already narrowed for this step; do not deliberate about tool choice, act.",
+    fallback: "If none of these fit, say what you need in your reply instead of guessing.",
+  })
 })
 
 test("formatTemplate substitutes named placeholders", () => {

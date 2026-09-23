@@ -1,0 +1,51 @@
+{
+  "skills": {
+    "gateThreshold": 0.3,
+    "rerank": "auto",
+    "rerankAbove": 40,
+    "rerankBelowP": 0.5,
+    "shortlist": 3,
+    "fitsThreshold": 0.3,
+    "minConfidence": 0.3,
+    "ids": {
+      "rank": "which",
+      "rerank": "which",
+      "gateActs": "gate::acts",
+      "gateProcedure": "gate::procedure",
+      "gateProse": "gate::prose",
+      "fits": "fits::{{id}}"
+    },
+    "questions": {
+      "rank": "Which of these skills, if any, is the right one to load to help with the user's latest request?",
+      "rerank": "Exactly one of these skills is the right one to load for the user's latest request. Which one? Read what each actually does, not just its name.",
+      "gateActs": "Is the assistant being asked to act on the user's files, accounts, devices, or online services, rather than only to explain or advise?",
+      "gateProcedure": "Would a careful expert answering this consult a specific documented procedure or set of commands, rather than answering from general understanding?",
+      "gateProse": "Could a knowledgeable generalist fully satisfy this request in prose, with no tools, no documentation, and no access to the user's files or accounts?",
+      "fits": "Does the skill '{{name}}' do the specific thing the user's request asks for?"
+    }
+  },
+  "tools": {
+    "maxTools": 12,
+    "minToolProbability": 0.05,
+    "needsToolThreshold": 0.3,
+    "minConfidence": 0.3,
+    "alwaysVisible": ["read", "write", "edit", "bash", "grep", "glob"],
+    "stateBudget": 6000,
+    "ids": { "next": "next", "needsTool": "needs_tool" },
+    "questions": {
+      "next": "Which single tool is the best next step for the agent to make progress?",
+      "needsTool": "Does making progress on the last step require calling a tool?"
+    },
+    "hints": {
+      "open": "<system_one_routing>",
+      "close": "</system_one_routing>",
+      "noTool": "No tool is needed for this step; answer directly.",
+      "start": "Start with: {{start}}.",
+      "available": "Available now: {{tools}}.",
+      "narrowed": "The tool list is already narrowed for this step; do not deliberate about tool choice, act.",
+      "fallback": "If none of these fit, say what you need in your reply instead of guessing."
+    }
+  },
+  "cache": { "max": 200, "ttlMs": 600000 },
+  "spend": { "maxCallsPerSession": 500, "warnAt": 0.8 }
+}

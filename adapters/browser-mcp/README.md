@@ -80,6 +80,26 @@ isError: False
 
 Every failure is a readable result, never a thrown protocol error.
 
+## Live run attempt (2026-09-23)
+
+One real attempt was made through the server against the actual jev checkout and the fixture at
+`~/jev-ultrafast/jev_ultrafast/static/fixture.html`. No browser was connected through
+browser-harness, so the run failed open with a readable reason and **zero paid calls**
+(`0 Jev decisions, $0.000000`):
+
+```text
+browser_task did not finish — error
+error: RuntimeError: daemon default didn't come up -- check /home/gerius/.config/browser-harness/tmp/bu-default.log
+goal: Open the fixture page and report the text of its main heading.
+final url: file:///home/gerius/jev-ultrafast/jev_ultrafast/static/fixture.html
+steps: 0 — 0 Jev decisions, $0.000000, 9711 ms
+Not confirmed by the caller: check the page or the outcome before reporting success.
+isError: False
+```
+
+Seed a browser per the OpenCode plugin README's prerequisites and rerun the same call to get a
+real trace.
+
 ## Tests
 
 ```bash

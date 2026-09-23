@@ -29,7 +29,7 @@ def _setting(ctx, key: str, default=None):
 def _handle_turn(ctx, *, session_id: str, user_message: str, **kwargs) -> dict | None:
     try:
         model = _setting(ctx, "model") or "~typesafe/jev-latest"
-        timeout_ms = _setting(ctx, "timeout_ms") or 1000
+        timeout_ms = _setting(ctx, "timeout_ms") or 2000
         cap = _setting(ctx, "max_calls_per_session") or decision.POLICY["spend"]["maxCallsPerSession"]
         warn_at = decision.POLICY["spend"]["warnAt"]
         skill_dirs = _setting(ctx, "skill_dirs") or DEFAULT_SKILL_DIRS

@@ -14,6 +14,7 @@ OPEN_GATE = {
     "gate::acts": {"type": "noul", "noul": 0.9},
     "gate::procedure": {"type": "noul", "noul": 0.8},
     "gate::prose": {"type": "noul", "noul": 0.2},
+    "gate::advisory": {"type": "noul", "noul": 0.5},
 }
 
 
@@ -47,6 +48,7 @@ class DecisionTest(unittest.TestCase):
                 "gate::acts": {"type": "noul", "noul": 0.1},
                 "gate::procedure": {"type": "noul", "noul": 0.1},
                 "gate::prose": {"type": "noul", "noul": 0.9},
+                "gate::advisory": {"type": "noul", "noul": 0.1},
             }
         )
         self.assertEqual(decision.decide(ask, "explain", roster), ("none", None))
@@ -130,6 +132,65 @@ class DecisionTest(unittest.TestCase):
             self.assertEqual([entry["id"] for entry in skills], ["same"])
             self.assertEqual(skills[0]["name"], "Top")
             self.assertEqual(skills[0]["path"], str(top / "SKILL.md"))
+
+    def test_folded_and_literal_descriptions_are_parsed(self):
+        folded = decision._parse_frontmatter(
+            "---\nname: ponytail\ndescription: >\n  Forces the laziest solution,\n  simplest and most minimal.\n---\n\nbody\n"
+        )
+        self.assertEqual(folded["description"], "Forces the laziest solution, simplest and most minimal.")
+        literal = decision._parse_frontmatter("---\nname: x\ndescription: |\n  line one\n  line two\n---\nbody")
+        self.assertEqual(literal["description"], "line one\nline two")
+        plain = decision._parse_frontmatter("---\nname: y\ndescription: does y\n---\nbody")
+        self.assertEqual(plain["description"], "does y")
+
+    def test_advisory_work_opens_the_gate(self):
+        roster = [{"id": "brainstorming", "name": "brainstorming", "description": "Explore intent", "content": "x"}]
+        low_act_gate = {
+            "gate::acts": {"type": "noul", "noul": 0.03},
+            "gate::procedure": {"type": "noul", "noul": 0.2},
+            "gate::prose": {"type": "noul", "noul": 0.8},
+        }
+        ask, _ = stub_ask(
+            {
+                "which": {
+                    "type": "choice",
+                    "choice": "brainstorming",
+                    "probabilities": {"brainstorming": 0.8},
+                    "confidence": 0.9,
+                },
+                **low_act_gate,
+                "gate::advisory": {"type": "noul", "noul": 0.9},
+            }
+        )
+        self.assertEqual(
+            decision.select_skill(ask, "help me figure out what this app should do", roster), "brainstorming"
+        )
+
+        ask, _ = stub_ask(
+            {
+                "which": {
+                    "type": "choice",
+                    "choice": "brainstorming",
+                    "probabilities": {"brainstorming": 0.8},
+                    "confidence": 0.9,
+                },
+                **low_act_gate,
+                "gate::advisory": {"type": "noul", "noul": 0.1},
+            }
+        )
+        self.assertIsNone(decision.select_skill(ask, "rename x to count", roster))
+
+    def test_decide_treats_a_missing_advisory_answer_as_no_change(self):
+        roster = [{"id": "a", "name": "A", "description": "Does A", "content": "body"}]
+        ask, _ = stub_ask(
+            {
+                "which": {"type": "choice", "choice": "a", "probabilities": {"a": 0.9}, "confidence": 0.9},
+                "gate::acts": {"type": "noul", "noul": 0.9},
+                "gate::procedure": {"type": "noul", "noul": 0.8},
+                "gate::prose": {"type": "noul", "noul": 0.2},
+            }
+        )
+        self.assertEqual(decision.decide(ask, "do A", roster), ("no-change", None))
 
     def test_transport_parses_answers_and_reports_meta(self):
         class FakeResponse:

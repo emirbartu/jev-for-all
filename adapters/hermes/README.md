@@ -114,12 +114,13 @@ lands; that is the proof the hook ran.
 
 ## Skill decision quality (L1)
 
-Run 2026-09-23 against the real Hermes roster — 78 skills (76 under `<category>/<skill>/`, plus
+Run 2026-09-24 against the real Hermes roster — 78 skills (76 under `<category>/<skill>/`, plus
 top-level `i-have-adhd` and the `find-skills` symlink) — with the adapter's real `decide()`,
-model `~typesafe/jev-latest` (resolved `typesafe/jev-1.13-20260917`). Corpus: the 12 covered
-cases in `fixtures/skill-eval/hermes-cases.jsonl`, written from the skills' own `SKILL.md`
-descriptions, plus the 20 `expected: null` cases from
-`fixtures/skill-eval/agents-skills-cases.jsonl`.
+model `~typesafe/jev-latest`. Corpus: the 12 covered cases in `fixtures/skill-eval/hermes-cases.jsonl`,
+written from the skills' own `SKILL.md` descriptions, plus the 20 `expected: null` cases from
+`fixtures/skill-eval/agents-skills-cases.jsonl`. The adapter asks the advisory-work question
+(parity with the TS core), and folded `description: >` frontmatter now parses correctly — all 78
+real skills have a non-empty description.
 
 ```bash
 OPENROUTER_API_KEY=... python3 adapters/hermes/eval/skill_l1.py --max-usd 0.10
@@ -127,18 +128,23 @@ OPENROUTER_API_KEY=... python3 adapters/hermes/eval/skill_l1.py --max-usd 0.10
 
 ```text
 cases: 32 scored 32 skipped 0 | roster 78 | model ~typesafe/jev-latest
-hit 24 (75.0%) | wrong-skill 0 (0.0%) | spurious 7 (21.9%) | missed 1 (3.1%)
-latency avg 4468 ms / max 10031 ms | tokens in 120350 out 29153 | est cost $0.0051
+hit 27 (84.4%) | wrong-skill 0 (0.0%) | spurious 4 (12.5%) | missed 1 (3.1%)
+latency avg 1085 ms / max 1628 ms | tokens in 128062 out 29445 | est cost $0.0054
 reference bar (TypeSafe cookbook): agent-alone 16.8% wrong / 9.8% spurious; with suggestion 7.3% / 4.0%
 ```
 
-Reading: 11 of 12 covered requests hit; the miss is `humanizer`, a writing request the gate
-turns away. All 7 spurious picks come from the no-skill half, where delegation skills claim
-terminal work: `claude-code` ×4 (read a file, run tests, grep, edit `.gitignore`),
-`simplify-code` ×2 (rename a variable, delete an unused import), `computer-use` ×1. Raw
-per-case results stay under `.superpowers/hermes-l1/` (gitignored). The run used the runner's
-10 s request timeout: at 78 skills the plugin's 1 s `timeout_ms` default times out, so raise
-that setting for a roster this size.
+Reading: 11 of 12 covered requests hit; the miss is `humanizer`. The remaining spurious picks
+come from the no-skill half, where delegation skills claim terminal work. Raw per-case results
+stay under `.superpowers/hermes-l1/` (gitignored).
+
+### Timeout
+
+Measured 2026-09-24 at 78 skills: a single Jev request (rank criteria for all 78 + the gate
+nouls) takes **758–910 ms** (avg 817 ms, 5 samples), and a full `decide()` — often two requests,
+because the roster exceeds `rerankAbove` — 1.1–1.7 s. The old 1 s per-request default left
+~90 ms of headroom, and an earlier slow window (4.5 s per decide) would have timed out every
+call; the default is now **2000 ms** per request (`timeout_ms`), with `--timeout-ms` on the
+runner for experiments. Both today's runs (1000 ms and 6000 ms) had zero request errors.
 
 ## Tests
 

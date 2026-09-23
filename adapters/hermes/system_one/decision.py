@@ -56,10 +56,20 @@ def _parse_frontmatter(text: str) -> dict:
     head = text[3:end]
     body = text[end + 4 :].lstrip("\r\n")
     fields = {}
-    for line in head.splitlines():
-        match = re.match(r"^([\w-]+):\s*(.*)$", line)
+    lines = head.splitlines()
+    index = 0
+    while index < len(lines):
+        match = re.match(r"^([\w-]+):\s*(.*)$", lines[index])
         if match:
-            fields[match.group(1)] = match.group(2).strip().strip("\"'")
+            key, value = match.group(1), match.group(2).strip()
+            if value in (">", "|"):
+                block = []
+                while index + 1 < len(lines) and re.match(r"^\s+\S", lines[index + 1]):
+                    block.append(lines[index + 1].strip())
+                    index += 1
+                value = " ".join(block) if value == ">" else "\n".join(block)
+            fields[key] = value.strip("\"'")
+        index += 1
     return {"name": fields.get("name"), "description": fields.get("description"), "body": body}
 
 
@@ -141,15 +151,17 @@ def select_skill(ask: Ask, request: str, skills: Iterable[dict]) -> str | None:
                 ids["gateActs"]: {"type": "noul", "instructions": questions["gateActs"]},
                 ids["gateProcedure"]: {"type": "noul", "instructions": questions["gateProcedure"]},
                 ids["gateProse"]: {"type": "noul", "instructions": questions["gateProse"]},
+                ids["advisory"]: {"type": "noul", "instructions": questions["advisory"]},
             },
         )
         acts = as_noul(first.get(ids["gateActs"]))
         procedure = as_noul(first.get(ids["gateProcedure"]))
         prose = as_noul(first.get(ids["gateProse"]))
-        if acts is None or procedure is None or prose is None:
+        advisory = as_noul(first.get(ids["advisory"]))
+        if acts is None or procedure is None or prose is None or advisory is None:
             return None
         gate = (acts + procedure + (1 - prose)) / 3
-        if gate < config["gateThreshold"]:
+        if gate < config["gateThreshold"] and advisory < config["advisoryThreshold"]:
             return None
 
         choice = as_choice(first.get(ids["rank"]))
@@ -216,7 +228,8 @@ def decide(ask: Ask | None, request: str, skills: Iterable[dict]) -> tuple[str, 
             state["seen"] = True
             choice = as_choice(answers.get(ids["rank"]))
             gate_ok = all(
-                as_noul(answers.get(ids[key])) is not None for key in ("gateActs", "gateProcedure", "gateProse")
+                as_noul(answers.get(ids[key])) is not None
+                for key in ("gateActs", "gateProcedure", "gateProse", "advisory")
             )
             confidence = choice["confidence"] if choice and choice["confidence"] is not None else 1
             state["confident_none"] = bool(choice) and gate_ok and confidence >= POLICY["skills"]["minConfidence"]

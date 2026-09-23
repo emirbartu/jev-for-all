@@ -12,5 +12,5 @@ provides_hooks:
 config_schema:
   model: {type: str, default: "~typesafe/jev-latest", description: "Jev model slug"}
   max_calls_per_session: {type: int, default: 500, description: "Stop calling Jev past this many calls in one session"}
-  timeout_ms: {type: int, default: 1000, description: "Per-request timeout in milliseconds"}
+  timeout_ms: {type: int, default: 2000, description: "Per-request timeout in milliseconds"}
   skill_dirs: {type: list, default: [], description: "Skill directories to scan; empty uses $HERMES_HOME/skills"}

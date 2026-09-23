@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // jev-for-all installer — zero-dependency ESM, runs under node and bun.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
@@ -269,7 +269,18 @@ async function main() {
   console.log('- Routing decisions log to the console with "debug": true; usage records go to observe.file when enabled.')
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+function isDirectRun() {
+  if (!process.argv[1]) return false
+  if (import.meta.url === pathToFileURL(process.argv[1]).href) return true
+  // npx/bunx run the bin through a symlink shim; node resolves the real path for import.meta.url.
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
+  } catch {
+    return false
+  }
+}
+
+if (isDirectRun()) {
   main().catch((error) => {
     console.error(String(error && error.message ? error.message : error))
     process.exitCode = 1

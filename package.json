@@ -1,6 +1,6 @@
 {
   "name": "jev-for-all",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "description": "Stop making your coding agent deliberate: Jev picks the skill, the tool subset and every browser move.",
   "repository": "github:emirbartu/jev-for-all",

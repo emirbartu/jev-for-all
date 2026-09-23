@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test"
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { install, stripJsonc, upsertPluginEntry } from "./jev-for-all.js"
@@ -121,4 +121,29 @@ test("install refuses to write an unparseable config", async () => {
   const result = await install({ configPath: config, key: "sk-or-test" })
   expect(result.status).toBe("invalid")
   expect(readFileSync(config, "utf8")).toBe("{ this is not json")
+})
+
+test("the CLI runs through a symlink shim (npx/bunx shape)", () => {
+  const node = Bun.which("node")
+  if (!node) {
+    console.warn("node not found; skipping the symlink shim test")
+    return
+  }
+  const dir = mkdtempSync(join(tmpdir(), "jev-shim-"))
+  const link = join(dir, "jev-for-all")
+  symlinkSync(join(import.meta.dir, "jev-for-all.js"), link)
+
+  const help = Bun.spawnSync([node, link, "help"], { stdout: "pipe", stderr: "pipe" })
+  expect(help.exitCode).toBe(0)
+  expect(help.stdout.toString()).toContain("Usage:")
+
+  const config = join(dir, "opencode.jsonc")
+  const installed = Bun.spawnSync([node, link, "install", "--config", config, "--key", "sk-or-shim"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  expect(installed.exitCode).toBe(0)
+  expect(existsSync(config)).toBe(true)
+  const plugins = parse(readFileSync(config, "utf8")).plugins as Array<unknown>
+  expect(plugins[0]).toEqual({ package: "jev-for-all", options: { apiKey: "sk-or-shim" } })
 })

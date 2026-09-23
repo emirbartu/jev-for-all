@@ -26,9 +26,11 @@ user's step: it writes `plugins.enabled` into `${HERMES_HOME:-$HOME/.hermes}/con
 
 ## What it reads
 
-- Skill roster: `$HERMES_HOME/skills/*/SKILL.md` by default, or the `skill_dirs` setting when
-  set. Each skill's `name`, `description`, and body are parsed from its frontmatter; a file
-  without frontmatter still counts, using its directory name.
+- Skill roster: `$HERMES_HOME/skills/**/SKILL.md` by default, or the `skill_dirs` setting when
+  set. Both `<skill>/SKILL.md` and `<category>/<skill>/SKILL.md` are scanned, hidden entries
+  are skipped, and each skill's `id` is its leaf directory name. Each skill's `name`,
+  `description`, and body are parsed from its frontmatter; a file without frontmatter still
+  counts, using its directory name. A duplicate id keeps the top-level occurrence.
 - Decision contract: `assets/decisions.json` — gate thresholds, confidence floor, rerank
   settings, injection cap (8000 chars), and the spend cap. Code paths read from it; no
   thresholds are hardcoded.
@@ -109,6 +111,34 @@ decision line per turn, for example:
 The injected context is observable in the turn: with the demo skill loaded the model answers
 `DONE-DEMO`. If the main model call fails for lack of provider auth, the decision line still
 lands; that is the proof the hook ran.
+
+## Skill decision quality (L1)
+
+Run 2026-09-23 against the real Hermes roster — 78 skills (76 under `<category>/<skill>/`, plus
+top-level `i-have-adhd` and the `find-skills` symlink) — with the adapter's real `decide()`,
+model `~typesafe/jev-latest` (resolved `typesafe/jev-1.13-20260917`). Corpus: the 12 covered
+cases in `fixtures/skill-eval/hermes-cases.jsonl`, written from the skills' own `SKILL.md`
+descriptions, plus the 20 `expected: null` cases from
+`fixtures/skill-eval/agents-skills-cases.jsonl`.
+
+```bash
+OPENROUTER_API_KEY=... python3 adapters/hermes/eval/skill_l1.py --max-usd 0.10
+```
+
+```text
+cases: 32 scored 32 skipped 0 | roster 78 | model ~typesafe/jev-latest
+hit 24 (75.0%) | wrong-skill 0 (0.0%) | spurious 7 (21.9%) | missed 1 (3.1%)
+latency avg 4468 ms / max 10031 ms | tokens in 120350 out 29153 | est cost $0.0051
+reference bar (TypeSafe cookbook): agent-alone 16.8% wrong / 9.8% spurious; with suggestion 7.3% / 4.0%
+```
+
+Reading: 11 of 12 covered requests hit; the miss is `humanizer`, a writing request the gate
+turns away. All 7 spurious picks come from the no-skill half, where delegation skills claim
+terminal work: `claude-code` ×4 (read a file, run tests, grep, edit `.gitignore`),
+`simplify-code` ×2 (rename a variable, delete an unused import), `computer-use` ×1. Raw
+per-case results stay under `.superpowers/hermes-l1/` (gitignored). The run used the runner's
+10 s request timeout: at 78 skills the plugin's 1 s `timeout_ms` default times out, so raise
+that setting for a roster this size.
 
 ## Tests
 

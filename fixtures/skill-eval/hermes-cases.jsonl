@@ -1,0 +1,12 @@
+{"id":"hermes-email-triage","request":"Triage my inbox: which threads need a reply first, and draft safe responses for the top three.","expected":"email-inbox-triage"}
+{"id":"hermes-himalaya","request":"Use the Himalaya CLI to read my IMAP mail and send a reply from the terminal.","expected":"himalaya"}
+{"id":"hermes-obsidian","request":"Search my Obsidian vault for notes about the launch plan and append a wikilink to the project note.","expected":"obsidian"}
+{"id":"hermes-youtube-content","request":"Turn this YouTube video into a summary and a blog post: https://www.youtube.com/watch?v=dQw4w9WgXcQ","expected":"youtube-content"}
+{"id":"hermes-pdf","request":"Extract the text and tables from this scanned PDF, then fill in the form fields.","expected":"pdf"}
+{"id":"hermes-docx","request":"Fill the {{placeholders}} in this Word .docx template and accept the tracked changes.","expected":"docx"}
+{"id":"hermes-powerpoint","request":"Build a .pptx deck from a JSON spec using python-pptx.","expected":"powerpoint"}
+{"id":"hermes-notion","request":"Create a page in my Notion database and update its properties with the ntn CLI.","expected":"notion"}
+{"id":"hermes-airtable","request":"Upsert these records into my Airtable base and filter them by a view.","expected":"airtable"}
+{"id":"hermes-maps","request":"Geocode this address, find nearby coffee shops, and give me the walking route.","expected":"maps"}
+{"id":"hermes-apple-notes","request":"Create a note in Apple Notes with the memo CLI and search my existing notes.","expected":"apple-notes"}
+{"id":"hermes-humanizer","request":"Strip the AI-sounding phrases from this draft so it reads like a person wrote it.","expected":"humanizer"}

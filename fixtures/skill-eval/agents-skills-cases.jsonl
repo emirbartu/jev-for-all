@@ -1,0 +1,64 @@
+{"id":"brainstorm-habit-app","request":"I want to build a habit-tracking app — help me figure out what it should do.","expected":"brainstorming"}
+{"id":"brainstorm-requirements","request":"Help me think through the requirements for a new CLI tool before we start coding.","expected":"brainstorming"}
+{"id":"plan-from-spec","request":"Turn the approved spec into a step-by-step implementation plan.","expected":"writing-plans"}
+{"id":"plan-before-code","request":"We have requirements for a multi-step migration; write the plan before touching code.","expected":"writing-plans"}
+{"id":"execute-separate","request":"Execute the plan in docs/plans/foo.md in a separate session, pausing at review checkpoints.","expected":"executing-plans"}
+{"id":"execute-task-by-task","request":"Work through this implementation plan task by task with review checkpoints.","expected":"executing-plans"}
+{"id":"tdd-endpoint","request":"Implement this new endpoint using TDD.","expected":"test-driven-development"}
+{"id":"tdd-bugfix","request":"Fix this bug, but write the failing test first.","expected":"test-driven-development"}
+{"id":"debug-flaky","request":"A test fails randomly after my change — help me find the root cause.","expected":"systematic-debugging"}
+{"id":"debug-wrong-values","request":"This function returns wrong values and I have no idea why; debug it.","expected":"systematic-debugging"}
+{"id":"verify-before-done","request":"Before I say this is done, verify it.","expected":"verification-before-completion"}
+{"id":"verify-passing","request":"Check that the tests really pass before I commit and claim it is fixed.","expected":"verification-before-completion"}
+{"id":"review-before-merge","request":"Get my branch reviewed before I merge it.","expected":"requesting-code-review"}
+{"id":"review-major-feature","request":"I just finished a major feature; review the work before I move on.","expected":"requesting-code-review"}
+{"id":"feedback-pr","request":"Here is the review feedback on my PR — help me work through it carefully.","expected":"receiving-code-review"}
+{"id":"feedback-questionable","request":"The reviewer's comment looks wrong; how should I handle this feedback?","expected":"receiving-code-review"}
+{"id":"sdd-current-session","request":"Execute this plan with a fresh subagent per task and a review between tasks, in this session.","expected":"subagent-driven-development"}
+{"id":"sdd-many-tasks","request":"Run the plan using subagents for each independent task in the current session.","expected":"subagent-driven-development"}
+{"id":"parallel-refactors","request":"I have three independent refactors with no shared state; run them in parallel.","expected":"dispatching-parallel-agents"}
+{"id":"parallel-tasks","request":"Two unrelated tasks that cannot affect each other — can they run at the same time?","expected":"dispatching-parallel-agents"}
+{"id":"worktree-feature","request":"Set up an isolated worktree for this feature.","expected":"using-git-worktrees"}
+{"id":"worktree-isolation","request":"Start this work in an isolated workspace so the main tree stays clean.","expected":"using-git-worktrees"}
+{"id":"finish-branch","request":"Implementation is done and all tests pass — decide how to integrate the work.","expected":"finishing-a-development-branch"}
+{"id":"merge-options","request":"The branch is finished; what are my options to merge it?","expected":"finishing-a-development-branch"}
+{"id":"find-pdf","request":"Find a skill that can convert PDFs to text.","expected":"find-skills"}
+{"id":"find-terraform","request":"Is there an installable skill for reviewing Terraform?","expected":"find-skills"}
+{"id":"skills-how-to","request":"How do I find and use the skills available in this conversation?","expected":"using-superpowers","acceptable":["using-superpowers","find-skills"]}
+{"id":"superpowers-setup","request":"Set up the superpowers workflow at the start of this conversation.","expected":"using-superpowers"}
+{"id":"ui-accessibility","request":"Review my landing page UI for accessibility.","expected":"web-design-guidelines"}
+{"id":"design-audit","request":"Audit this site's design against the Web Interface Guidelines.","expected":"web-design-guidelines"}
+{"id":"new-skill","request":"Create a new skill for our deploy checklist.","expected":"writing-skills"}
+{"id":"edit-skill","request":"Edit an existing skill and verify it works before deploying.","expected":"writing-skills"}
+{"id":"lazy-refactor","request":"Keep this refactor minimal — the laziest solution that actually works.","expected":"ponytail"}
+{"id":"delete-instead","request":"Do less: what can we delete instead of writing this new code?","expected":"ponytail"}
+{"id":"audit-repo","request":"Audit this whole repo for over-engineering.","expected":"ponytail-audit"}
+{"id":"delete-from-repo","request":"What can I delete from this codebase?","expected":"ponytail-audit"}
+{"id":"debt-ledger","request":"Harvest every ponytail comment into a debt ledger.","expected":"ponytail-debt"}
+{"id":"deferred-work","request":"What did ponytail defer in this project?","expected":"ponytail-debt"}
+{"id":"gain-scoreboard","request":"Show ponytail's measured impact as a scoreboard.","expected":"ponytail-gain"}
+{"id":"gain-what-saved","request":"What does ponytail save?","expected":"ponytail-gain"}
+{"id":"help-commands","request":"What ponytail commands are there?","expected":"ponytail-help"}
+{"id":"help-use","request":"How do I use ponytail?","expected":"ponytail-help"}
+{"id":"review-overengineering","request":"Review this diff for over-engineering — what can I delete?","expected":"ponytail-review"}
+{"id":"simplify-review","request":"Is this over-engineered? Simplify review.","expected":"ponytail-review"}
+{"id":"noskill-greeting","request":"hey, how's it going?","expected":null}
+{"id":"noskill-thanks","request":"thanks, that worked!","expected":null}
+{"id":"noskill-capital","request":"What is the capital of Portugal?","expected":null}
+{"id":"noskill-tcp","request":"Explain how TCP handshakes work.","expected":null}
+{"id":"noskill-percent","request":"Convert 15% of 240 for me.","expected":null}
+{"id":"noskill-429","request":"What does HTTP 429 mean?","expected":null}
+{"id":"noskill-haiku","request":"Write a haiku about rain.","expected":null}
+{"id":"noskill-translate","request":"Translate 'good morning' into Turkish.","expected":null}
+{"id":"noskill-time","request":"What time is it in Tokyo right now?","expected":null}
+{"id":"noskill-rename","request":"Rename the variable x to count in this function.","expected":null}
+{"id":"noskill-version","request":"Bump the version to 1.2.0 in package.json.","expected":null}
+{"id":"noskill-gitignore","request":"Add dist/ to .gitignore.","expected":null}
+{"id":"noskill-browser-tool","request":"Call the browser_task tool to open example.com.","expected":null}
+{"id":"noskill-read-file","request":"Read /tmp/notes.txt and print the first line.","expected":null}
+{"id":"noskill-run-tests","request":"Run bun test and paste the output.","expected":null}
+{"id":"noskill-grep","request":"Search the repo for TODO comments.","expected":null}
+{"id":"noskill-let-const","request":"What is the difference between let and const in JavaScript?","expected":null}
+{"id":"noskill-puppy","request":"Suggest a name for my new puppy.","expected":null}
+{"id":"noskill-summary","request":"Summarize this paragraph: the quick brown fox jumps over the lazy dog.","expected":null}
+{"id":"noskill-unused-import","request":"Delete the unused import on line 4.","expected":null}

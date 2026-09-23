@@ -2,13 +2,21 @@
   "name": "jev-for-all",
   "version": "0.1.0",
   "license": "MIT",
+  "description": "Stop making your coding agent deliberate: Jev picks the skill, the tool subset and every browser move.",
+  "repository": "github:emirbartu/jev-for-all",
+  "keywords": ["jev", "typesafe", "system-one", "opencode", "claude-code", "hermes", "mcp", "agent", "decisions"],
   "type": "module",
   "exports": {
     ".": "./index.ts"
   },
+  "bin": {
+    "jev-for-all": "bin/jev-for-all.js"
+  },
   "files": [
     "index.ts",
-    "src"
+    "src",
+    "spec",
+    "bin"
   ],
   "scripts": {
     "test": "bun test",

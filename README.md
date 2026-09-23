@@ -13,6 +13,16 @@ same fast decisions instead of another prompt.
 
 ## Quick start (OpenCode)
 
+```bash
+bunx jev-for-all install
+```
+
+The installer writes the plugin block into your OpenCode config and prompts for your OpenRouter
+key ([create one](https://openrouter.ai/keys)); it is idempotent and leaves everything else in
+the file alone. Restart OpenCode — routing is on for every session.
+
+Or edit it yourself:
+
 ```jsonc
 // ~/.config/opencode/opencode.jsonc
 {
@@ -22,11 +32,8 @@ same fast decisions instead of another prompt.
 }
 ```
 
-1. `git clone https://github.com/emirbartu/jev-for-all ~/jev-for-all`
-2. Grab an OpenRouter key (the model runs there): <https://openrouter.ai/keys>
-3. Add the block above, pointing `package` at the clone (or set `OPENROUTER_API_KEY` and omit
-   `apiKey`)
-4. Restart OpenCode. Done — routing is on for every session.
+Let your agent install it: point it at
+<https://raw.githubusercontent.com/emirbartu/jev-for-all/main/docs/install.md>.
 
 ## Measured results, not promises
 

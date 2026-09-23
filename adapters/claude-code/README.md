@@ -52,9 +52,10 @@ per-session call count.
 
 ## Data egress
 
-The `UserPromptSubmit` hook sends the prompt text and the skill roster (names, ids,
-descriptions) to OpenRouter's decisions endpoint. The injected skill body stays local. No
-other data leaves the machine; logging is local-only.
+The `UserPromptSubmit` hook sends the prompt text, the skill roster (names, ids,
+descriptions), and, when rerank runs, the first 700 characters of each shortlisted skill's
+body to OpenRouter's decisions endpoint. The injected skill body stays local. No other data
+leaves the machine; logging is local-only.
 
 ## Fail-open
 

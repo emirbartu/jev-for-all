@@ -1,3 +1,4 @@
+import { formatTemplate, policy } from "./policy"
 import { type Ask, type Question, asChoice, asNoul } from "./jev"
 
 export interface SkillLike {
@@ -18,23 +19,14 @@ export interface SkillRoutingConfig {
 }
 
 export const defaultSkillRouting: SkillRoutingConfig = {
-  gateThreshold: 0.3,
-  rerank: "auto",
-  rerankAbove: 40,
-  rerankBelowP: 0.5,
-  shortlist: 3,
-  fitsThreshold: 0.3,
-  minConfidence: 0.3,
+  gateThreshold: policy.skills.gateThreshold,
+  rerank: policy.skills.rerank,
+  rerankAbove: policy.skills.rerankAbove,
+  rerankBelowP: policy.skills.rerankBelowP,
+  shortlist: policy.skills.shortlist,
+  fitsThreshold: policy.skills.fitsThreshold,
+  minConfidence: policy.skills.minConfidence,
 }
-
-const RANK_INSTRUCTIONS = "Which of these skills, if any, is the right one to load to help with the user's latest request?"
-const RERANK_INSTRUCTIONS =
-  "Exactly one of these skills is the right one to load for the user's latest request. Which one? Read what each actually does, not just its name."
-const GATE_ACTS = "Is the assistant being asked to act on the user's files, accounts, devices, or online services, rather than only to explain or advise?"
-const GATE_PROCEDURE =
-  "Would a careful expert answering this consult a specific documented procedure or set of commands, rather than answering from general understanding?"
-const GATE_PROSE =
-  "Could a knowledgeable generalist fully satisfy this request in prose, with no tools, no documentation, and no access to the user's files or accounts?"
 
 export async function selectSkill(
   ask: Ask,
@@ -44,6 +36,9 @@ export async function selectSkill(
   const skills = input.skills.filter((skill) => skill.id)
   if (skills.length === 0 || input.request.trim() === "") return null
 
+  const ids = policy.skills.ids
+  const questions = policy.skills.questions
+
   try {
     const state = { request: input.request }
     const roster = Object.fromEntries(
@@ -52,21 +47,21 @@ export async function selectSkill(
     const first = await ask({
       state,
       questions: {
-        which: { type: "choice", instructions: RANK_INSTRUCTIONS, criteria: roster },
-        "gate::acts": { type: "noul", instructions: GATE_ACTS },
-        "gate::procedure": { type: "noul", instructions: GATE_PROCEDURE },
-        "gate::prose": { type: "noul", instructions: GATE_PROSE },
+        [ids.rank]: { type: "choice", instructions: questions.rank, criteria: roster },
+        [ids.gateActs]: { type: "noul", instructions: questions.gateActs },
+        [ids.gateProcedure]: { type: "noul", instructions: questions.gateProcedure },
+        [ids.gateProse]: { type: "noul", instructions: questions.gateProse },
       },
     })
 
-    const [acts, procedure, prose] = (["acts", "procedure", "prose"] as const).map((key) =>
-      asNoul(first[`gate::${key}`]),
-    )
+    const acts = asNoul(first[ids.gateActs])
+    const procedure = asNoul(first[ids.gateProcedure])
+    const prose = asNoul(first[ids.gateProse])
     if (!acts || !procedure || !prose) return null
     const gate = (acts.noul + procedure.noul + (1 - prose.noul)) / 3
     if (gate < config.gateThreshold) return null
 
-    const choice = asChoice(first.which)
+    const choice = asChoice(first[ids.rank])
     if (!choice || !skills.some((skill) => skill.id === choice.choice)) return null
     if ((choice.confidence ?? 1) < config.minConfidence) return null
 
@@ -90,19 +85,19 @@ export async function selectSkill(
             return [id, `${skill.name}${skill.description ? ` — ${skill.description}` : ""} — ${skill.content.slice(0, 700)}`]
           }),
         )
-        const questions: Record<string, Question> = {
-          which: { type: "choice", instructions: RERANK_INSTRUCTIONS, criteria },
+        const rerankQuestions: Record<string, Question> = {
+          [ids.rerank]: { type: "choice", instructions: questions.rerank, criteria },
         }
         for (const id of shortlist) {
-          questions[`fits::${id}`] = {
+          rerankQuestions[formatTemplate(ids.fits, { id })] = {
             type: "noul",
-            instructions: `Does the skill '${byId.get(id)!.name}' do the specific thing the user's request asks for?`,
+            instructions: formatTemplate(questions.fits, { name: byId.get(id)!.name }),
           }
         }
-        const second = await ask({ state, questions })
-        const fits = shortlist.map((id) => asNoul(second[`fits::${id}`])?.noul ?? 0)
+        const second = await ask({ state, questions: rerankQuestions })
+        const fits = shortlist.map((id) => asNoul(second[formatTemplate(ids.fits, { id })])?.noul ?? 0)
         if (Math.max(...fits) < config.fitsThreshold) return null
-        const reranked = asChoice(second.which)
+        const reranked = asChoice(second[ids.rerank])
         if (reranked && shortlist.includes(reranked.choice) && (reranked.confidence ?? 1) >= config.minConfidence) {
           winner = reranked.choice
         }

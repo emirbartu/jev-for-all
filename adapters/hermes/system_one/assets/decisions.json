@@ -7,12 +7,14 @@
     "shortlist": 3,
     "fitsThreshold": 0.3,
     "minConfidence": 0.3,
+    "advisoryThreshold": 0.5,
     "ids": {
       "rank": "which",
       "rerank": "which",
       "gateActs": "gate::acts",
       "gateProcedure": "gate::procedure",
       "gateProse": "gate::prose",
+      "advisory": "gate::advisory",
       "fits": "fits::{{id}}"
     },
     "questions": {
@@ -21,6 +23,7 @@
       "gateActs": "Is the assistant being asked to act on the user's files, accounts, devices, or online services, rather than only to explain or advise?",
       "gateProcedure": "Would a careful expert answering this consult a specific documented procedure or set of commands, rather than answering from general understanding?",
       "gateProse": "Could a knowledgeable generalist fully satisfy this request in prose, with no tools, no documentation, and no access to the user's files or accounts?",
+      "advisory": "Does this request ask for creative or advisory work on the user's software project — designing, planning, brainstorming, reviewing, or dispatching development work — where a documented process should guide the assistant, rather than a specific mechanical change?",
       "fits": "Does the skill '{{name}}' do the specific thing the user's request asks for?"
     },
     "criteria": {

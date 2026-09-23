@@ -127,8 +127,20 @@ const skillRoster = [
   { id: "pptx-edit", name: "pptx-edit", description: "Edit decks", content: "Use the editor" },
 ]
 
-const openGate = { "gate::acts": { type: "noul", noul: 0.9 }, "gate::procedure": { type: "noul", noul: 0.8 }, "gate::prose": { type: "noul", noul: 0.2 } }
-const closedGate = { "gate::acts": { type: "noul", noul: 0.1 }, "gate::procedure": { type: "noul", noul: 0.1 }, "gate::prose": { type: "noul", noul: 0.9 } }
+const openGate = {
+  "gate::acts": { type: "noul", noul: 0.9 },
+  "gate::procedure": { type: "noul", noul: 0.8 },
+  "gate::prose": { type: "noul", noul: 0.2 },
+  "gate::advisory": { type: "noul", noul: 0.1 },
+  "rank::fits": { type: "noul", noul: 0.9 },
+}
+const closedGate = {
+  "gate::acts": { type: "noul", noul: 0.1 },
+  "gate::procedure": { type: "noul", noul: 0.1 },
+  "gate::prose": { type: "noul", noul: 0.9 },
+  "gate::advisory": { type: "noul", noul: 0.1 },
+  "rank::fits": { type: "noul", noul: 0.9 },
+}
 
 test("selectSkill returns null when the gate is closed", async () => {
   const { ask } = stubAsk({
@@ -394,6 +406,8 @@ test("prompt hook routes skills end to end", async () => {
         "gate::acts": { type: "noul", noul: 0.9 },
         "gate::procedure": { type: "noul", noul: 0.8 },
         "gate::prose": { type: "noul", noul: 0.2 },
+        "gate::advisory": { type: "noul", noul: 0.5 },
+        "rank::fits": { type: "noul", noul: 0.9 },
       },
       model: "~typesafe/jev-latest",
       usage: { input_tokens: 1, output_tokens: 1 },
@@ -764,6 +778,7 @@ import { formatTemplate, policy } from "./policy"
 test("policy carries the shipped defaults verbatim", () => {
   expect(policy.skills).toMatchObject({
     gateThreshold: 0.3,
+    advisoryThreshold: 0.5,
     rerank: "auto",
     rerankAbove: 40,
     rerankBelowP: 0.5,
@@ -776,6 +791,7 @@ test("policy carries the shipped defaults verbatim", () => {
       gateActs: "gate::acts",
       gateProcedure: "gate::procedure",
       gateProse: "gate::prose",
+      advisory: "gate::advisory",
       fits: "fits::{{id}}",
     },
   })
@@ -796,6 +812,7 @@ test("policy carries the shipped defaults verbatim", () => {
     gateActs: "Is the assistant being asked to act on the user's files, accounts, devices, or online services, rather than only to explain or advise?",
     gateProcedure: "Would a careful expert answering this consult a specific documented procedure or set of commands, rather than answering from general understanding?",
     gateProse: "Could a knowledgeable generalist fully satisfy this request in prose, with no tools, no documentation, and no access to the user's files or accounts?",
+    advisory: "Does this request ask for creative or advisory work on the user's software project — designing, planning, brainstorming, reviewing, or dispatching development work — where a documented process should guide the assistant, rather than a specific mechanical change?",
     fits: "Does the skill '{{name}}' do the specific thing the user's request asks for?",
   })
   expect(policy.tools.questions).toEqual({
@@ -825,6 +842,7 @@ import { defaultSkillRouting } from "./skills"
 test("skill routing defaults are the policy values", () => {
   expect(defaultSkillRouting).toEqual({
     gateThreshold: 0.3,
+    advisoryThreshold: 0.5,
     rerank: "auto",
     rerankAbove: 40,
     rerankBelowP: 0.5,
@@ -832,6 +850,32 @@ test("skill routing defaults are the policy values", () => {
     fitsThreshold: 0.3,
     minConfidence: 0.3,
   })
+})
+
+test("advisory work opens the gate even when the act gate is closed", async () => {
+  const { ask } = stubAsk({
+    which: { type: "choice", choice: "brainstorming", probabilities: { brainstorming: 0.8 }, confidence: 0.9 },
+    "gate::acts": { type: "noul", noul: 0.03 },
+    "gate::procedure": { type: "noul", noul: 0.2 },
+    "gate::prose": { type: "noul", noul: 0.8 },
+    "gate::advisory": { type: "noul", noul: 0.9 },
+    "rank::fits": { type: "noul", noul: 0.9 },
+  })
+  const roster = [{ id: "brainstorming", name: "brainstorming", description: "Explore intent", content: "x" }]
+  expect(
+    await selectSkill(ask, { request: "help me figure out what this app should do", skills: roster, config: { rerank: false } }),
+  ).toEqual({ id: "brainstorming" })
+})
+
+test("missing the advisory answer fails open to no skill", async () => {
+  const { ask } = stubAsk({
+    which: { type: "choice", choice: "ponytail", probabilities: { ponytail: 0.9 }, confidence: 0.9 },
+    "gate::acts": { type: "noul", noul: 0.9 },
+    "gate::procedure": { type: "noul", noul: 0.8 },
+    "gate::prose": { type: "noul", noul: 0.2 },
+  })
+  const roster = [{ id: "ponytail", name: "ponytail", description: "Lazy", content: "x" }]
+  expect(await selectSkill(ask, { request: "do it", skills: roster, config: { rerank: false } })).toBeNull()
 })
 
 test("skill questions use the policy ids and text", async () => {

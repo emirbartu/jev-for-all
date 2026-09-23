@@ -44,7 +44,7 @@ Let your agent install it: point it at
 ## Measured results, not promises
 
 - **Skill routing** — 64 real requests against a 22-skill roster: **0 wrong picks**, hit rate
-  **81.3%**, a full run costs **~$0.005**.
+  **85.9%**, a full run costs **~$0.005**.
 - **Decision cost** — **≈ $0.0001 per decision**; a busy session costs pennies.
 - **Browser** — one live `browser_task` run, "open this page and click that article": **2 steps,
   3 decisions, $0.000199, 3.7 s**, correct final page.

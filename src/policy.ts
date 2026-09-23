@@ -3,6 +3,7 @@ import { join } from "node:path"
 
 export interface SkillPolicy {
   gateThreshold: number
+  advisoryThreshold: number
   rerank: boolean | "auto"
   rerankAbove: number
   rerankBelowP: number
@@ -15,6 +16,7 @@ export interface SkillPolicy {
     gateActs: string
     gateProcedure: string
     gateProse: string
+    advisory: string
     fits: string
   }
   questions: {
@@ -23,6 +25,7 @@ export interface SkillPolicy {
     gateActs: string
     gateProcedure: string
     gateProse: string
+    advisory: string
     fits: string
   }
   criteria: {

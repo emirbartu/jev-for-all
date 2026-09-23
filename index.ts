@@ -91,6 +91,11 @@ export function readOptions(raw: Record<string, unknown>): ResolvedOptions {
     skills: {
       enabled: bool("skills.enabled", skills.enabled, true),
       gateThreshold: number("skills.gateThreshold", skills.gateThreshold, defaultSkillRouting.gateThreshold),
+      advisoryThreshold: number(
+        "skills.advisoryThreshold",
+        skills.advisoryThreshold,
+        defaultSkillRouting.advisoryThreshold,
+      ),
       rerank: rerank(skills.rerank),
       rerankAbove: number("skills.rerankAbove", skills.rerankAbove, defaultSkillRouting.rerankAbove),
       rerankBelowP: number("skills.rerankBelowP", skills.rerankBelowP, defaultSkillRouting.rerankBelowP),

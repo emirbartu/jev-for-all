@@ -23,7 +23,12 @@ export async function decide(ask: Ask | undefined, request: string, skills: read
     if (!sawFirst) {
       sawFirst = true
       const choice = asChoice(answers[policy.skills.ids.rank])
-      const gateIds = [policy.skills.ids.gateActs, policy.skills.ids.gateProcedure, policy.skills.ids.gateProse]
+      const gateIds = [
+        policy.skills.ids.gateActs,
+        policy.skills.ids.gateProcedure,
+        policy.skills.ids.gateProse,
+        policy.skills.ids.advisory,
+      ]
       const gateOk = gateIds.every((id) => asNoul(answers[id]) !== null)
       confidentNone = choice !== null && gateOk && (choice.confidence ?? 1) >= policy.skills.minConfidence
     }

@@ -10,6 +10,7 @@ export interface SkillLike {
 
 export interface SkillRoutingConfig {
   gateThreshold: number
+  advisoryThreshold: number
   rerank: boolean | "auto"
   rerankAbove: number
   rerankBelowP: number
@@ -20,6 +21,7 @@ export interface SkillRoutingConfig {
 
 export const defaultSkillRouting: SkillRoutingConfig = {
   gateThreshold: policy.skills.gateThreshold,
+  advisoryThreshold: policy.skills.advisoryThreshold,
   rerank: policy.skills.rerank,
   rerankAbove: policy.skills.rerankAbove,
   rerankBelowP: policy.skills.rerankBelowP,
@@ -54,15 +56,17 @@ export async function selectSkill(
         [ids.gateActs]: { type: "noul", instructions: questions.gateActs },
         [ids.gateProcedure]: { type: "noul", instructions: questions.gateProcedure },
         [ids.gateProse]: { type: "noul", instructions: questions.gateProse },
+        [ids.advisory]: { type: "noul", instructions: questions.advisory },
       },
     })
 
     const acts = asNoul(first[ids.gateActs])
     const procedure = asNoul(first[ids.gateProcedure])
     const prose = asNoul(first[ids.gateProse])
-    if (!acts || !procedure || !prose) return null
+    const advisory = asNoul(first[ids.advisory])
+    if (!acts || !procedure || !prose || !advisory) return null
     const gate = (acts.noul + procedure.noul + (1 - prose.noul)) / 3
-    if (gate < config.gateThreshold) return null
+    if (gate < config.gateThreshold && advisory.noul < config.advisoryThreshold) return null
 
     const choice = asChoice(first[ids.rank])
     if (!choice || !skills.some((skill) => skill.id === choice.choice)) return null

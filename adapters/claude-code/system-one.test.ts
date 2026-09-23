@@ -30,6 +30,7 @@ const openGate = {
   "gate::acts": { type: "noul", noul: 0.9 },
   "gate::procedure": { type: "noul", noul: 0.8 },
   "gate::prose": { type: "noul", noul: 0.2 },
+  "gate::advisory": { type: "noul", noul: 0.1 },
 }
 
 test("scanSkillDirs parses frontmatter and skips non-skill dirs", () => {
@@ -74,6 +75,7 @@ test("decide returns none when Jev answers but picks no skill", async () => {
     "gate::acts": { type: "noul", noul: 0.1 },
     "gate::procedure": { type: "noul", noul: 0.1 },
     "gate::prose": { type: "noul", noul: 0.9 },
+    "gate::advisory": { type: "noul", noul: 0.1 },
   })
   const decision = await decide(ask, "explain monads", [
     { id: "pptx-author", name: "pptx-author", description: "Author decks", content: "Use python-pptx" },

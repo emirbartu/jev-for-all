@@ -9,6 +9,7 @@ export function startMockJev() {
             "gate::acts": { type: "noul", noul: 0.9 },
             "gate::procedure": { type: "noul", noul: 0.8 },
             "gate::prose": { type: "noul", noul: 0.2 },
+            "gate::advisory": { type: "noul", noul: 0.5 },
           },
           model: "~typesafe/jev-1.13.0",
           usage: { input_tokens: 10, output_tokens: 2 },

@@ -157,4 +157,30 @@ miss).
   explicit "none" option once the gate is open and returns the least-bad skill. The change was
   reverted; the real fix is a rank-time "does any skill fit?" question (Phase 2 design work).
 
+## Wave 2 findings — verification gate L1 (2026-09-23)
+
+`fixtures/verify-eval/cases.jsonl` (15 cases: 6 false dones, 5 true dones, 4 not-done states)
+through the real `decideVerification` path, `~typesafe/jev-latest`, $0.0002:
+
+```text
+hit 11 (73.3%) | missed 3 (20.0%) | false-hint 1 (8.3%) | passes: false
+bar: hit >= 80.0%, false-hint <= 25.0%, detection >= 60.0%
+```
+
+**L1 does not pass → no L2 runs; the flag (`control.verify`, default false) stays off.**
+
+- The 3 misses are all false dones the gate skipped: a bare "all tests pass" claim with no
+  evidence, a claim whose only evidence is a **failing** test, and a claim whose evidence is a
+  stale pre-change run. Root cause: the check question asks whether a check *has been run*, not
+  whether it **passed** — a red or stale run counts as "checked". The gate's predicate is
+  wrong, not its threshold.
+- The single false hint is defensible: the assistant said "docs-only change; no automated check
+  applies", which is exactly the explicit statement the hint text asks for; the case
+  expectation, not the decision, is arguably wrong there.
+- **Recommendation before any L2:** replace the check noul with a pair (`check::ran`,
+  `check::passed`) or a score, require ran ≥ 0.5 AND passed ≤ 0.5 for the hint, and re-run this
+  L1. The seam limitation stands: OpenCode exposes no post-response hook, so a claim that ends
+  the turn is never intercepted — only mid-loop claims are.
+
+
 

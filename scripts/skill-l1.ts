@@ -158,6 +158,17 @@ export function classify(
   return [expected, ...acceptable].includes(decision) ? "hit" : "wrong-skill"
 }
 
+/** A null decision with zero billed input tokens is a transport failure, not a decision. */
+export function classifyOutcome(
+  expected: string | null,
+  acceptable: readonly string[],
+  decision: string | null,
+  inputTokens: number,
+): CaseResult["classification"] {
+  if (decision === null && inputTokens === 0) return "skipped"
+  return classify(expected, acceptable, decision)
+}
+
 export function summarize(results: readonly CaseResult[]): L1Summary {
   const scored = results.filter((result) => result.classification !== "skipped")
   const count = (kind: CaseResult["classification"]) => scored.filter((result) => result.classification === kind).length
@@ -206,6 +217,7 @@ export function parseArgs(argv: readonly string[]): {
   maxUsd: number
   out: string
   model?: string
+  timeoutMs: number
 } {
   const value = (name: string): string | undefined => {
     const index = argv.indexOf(name)
@@ -220,6 +232,7 @@ export function parseArgs(argv: readonly string[]): {
     maxUsd: value("--max-usd") === undefined ? 0.1 : Number(value("--max-usd")),
     out: value("--out") ?? `.superpowers/skill-l1/${stamp}.jsonl`,
     model: value("--model"),
+    timeoutMs: value("--timeout-ms") === undefined ? 1000 : Number(value("--timeout-ms")),
   }
 }
 
@@ -258,6 +271,7 @@ async function main(): Promise<void> {
     const meta: { model?: string; inputTokens?: number; outputTokens?: number } = {}
     const ask = createJev({
       apiKey,
+      timeoutMs: args.timeoutMs,
       onMeta: (info) => Object.assign(meta, info),
       ...(args.model ? { model: args.model } : {}),
     })
@@ -273,7 +287,7 @@ async function main(): Promise<void> {
       expected: item.expected,
       acceptable: item.acceptable ?? [],
       decision: decision?.id ?? null,
-      classification: classify(item.expected, item.acceptable ?? [], decision?.id ?? null),
+      classification: classifyOutcome(item.expected, item.acceptable ?? [], decision?.id ?? null, inputTokens),
       latencyMs,
       model: meta.model,
       inputTokens,
@@ -282,7 +296,8 @@ async function main(): Promise<void> {
     }
     results.push(result)
     appendFileSync(args.out, JSON.stringify(result) + "\n")
-    console.log(`${result.classification === "hit" ? "PASS" : "FAIL"} ${item.id} -> ${result.decision ?? "(none)"} expected ${item.expected ?? "(none)"}`)
+    const tag = result.classification === "hit" ? "PASS" : result.classification === "skipped" ? "SKIP" : "FAIL"
+    console.log(`${tag} ${item.id} -> ${result.decision ?? (result.classification === "skipped" ? "(transport)" : "(none)")} expected ${item.expected ?? "(none)"}`)
   }
   console.log(formatSummary(summarize(results), { rosterSize: roster.length, model: args.model ?? "~typesafe/jev-latest" }))
   console.log(`raw results: ${args.out}`)

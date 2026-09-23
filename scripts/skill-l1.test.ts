@@ -1,9 +1,11 @@
 import { expect, test } from "bun:test"
 import {
   classify,
+  classifyOutcome,
   costOf,
   formatSummary,
   loadCases,
+  parseArgs,
   parseSkillFile,
   summarize,
   validateCases,
@@ -115,4 +117,17 @@ test("formatSummary reports the numbers and the reference bar", () => {
   expect(text).toContain("roster 22")
   expect(text).toContain("wrong-skill")
   expect(text).toContain("7.3% / 4.0%")
+})
+
+test("parseArgs reads the timeout flag", () => {
+  expect(parseArgs(["--timeout-ms", "5000"]).timeoutMs).toBe(5000)
+  expect(parseArgs([]).timeoutMs).toBe(1000)
+})
+
+test("classifyOutcome treats a no-token null as a transport skip, never a miss", () => {
+  expect(classifyOutcome("brainstorming", [], null, 0)).toBe("skipped")
+  expect(classifyOutcome("brainstorming", [], null, 900)).toBe("missed")
+  expect(classifyOutcome(null, [], null, 0)).toBe("skipped")
+  expect(classifyOutcome(null, [], "ponytail", 900)).toBe("spurious")
+  expect(classifyOutcome("ponytail", [], "ponytail", 900)).toBe("hit")
 })

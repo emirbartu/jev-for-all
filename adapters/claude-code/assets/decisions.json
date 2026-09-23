@@ -33,6 +33,16 @@
       "chars": 8000
     }
   },
+  "control": {
+    "verify": false,
+    "claimMin": 0.5,
+    "checkMax": 0.5,
+    "questions": {
+      "claim": "Does the latest assistant message assert that the work is complete, done, or finished?",
+      "check": "Has an automated check (tests, build, lint, or a re-read of the changed artifact) been run against this change in this session?"
+    },
+    "hint": "<system_one_control>\nBefore finishing: run the relevant check for this change, or state explicitly that no check exists. Do not claim completion without evidence.\n</system_one_control>"
+  },
   "tools": {
     "maxTools": 12,
     "minToolProbability": 0.05,

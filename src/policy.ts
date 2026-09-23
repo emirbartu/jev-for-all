@@ -66,6 +66,17 @@ export interface ToolPolicy {
   }
 }
 
+export interface ControlPolicy {
+  verify: boolean
+  claimMin: number
+  checkMax: number
+  questions: {
+    claim: string
+    check: string
+  }
+  hint: string
+}
+
 export interface CachePolicy {
   max: number
   ttlMs: number
@@ -79,6 +90,7 @@ export interface SpendPolicy {
 export interface Policy {
   skills: SkillPolicy
   tools: ToolPolicy
+  control: ControlPolicy
   cache: CachePolicy
   spend: SpendPolicy
 }

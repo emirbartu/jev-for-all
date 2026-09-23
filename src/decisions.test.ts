@@ -1024,3 +1024,164 @@ test("createJev does not call onMeta on a failed request", async () => {
     mock.server.stop(true)
   }
 })
+
+import { decideVerification, latestAssistantText, looksLikeClaim } from "./verify"
+
+const claimMessages = (text: string, evidence?: string) => [
+  { role: "user", content: [{ type: "text", text: "implement the feature" }] },
+  ...(evidence
+    ? [
+        { role: "assistant", content: [{ type: "tool-call", name: "bash" }] },
+        { role: "tool", content: [{ type: "tool-result", name: "bash", result: { type: "text", value: evidence } }] },
+      ]
+    : []),
+  { role: "assistant", content: [{ type: "text", text }] },
+]
+
+test("looksLikeClaim only matches completion language", () => {
+  expect(looksLikeClaim("Done — everything works.")).toBe(true)
+  expect(looksLikeClaim("All tests pass now.")).toBe(true)
+  expect(looksLikeClaim("Implementing now; next I will run the tests.")).toBe(false)
+  expect(looksLikeClaim("Should I also update the docs?")).toBe(false)
+})
+
+test("latestAssistantText returns the newest assistant text", () => {
+  expect(latestAssistantText(claimMessages("Done."))).toBe("Done.")
+  expect(latestAssistantText([{ role: "user", content: [{ type: "text", text: "hi" }] }])).toBe("")
+})
+
+test("decideVerification hints only on an unverified claim", async () => {
+  const claimed = stubAsk({
+    "control::claim": { type: "noul", noul: 0.9 },
+    "control::check": { type: "noul", noul: 0.1 },
+  })
+  const hint = await decideVerification(claimed.ask, { messages: claimMessages("Done — everything works.") })
+  expect(hint?.hint).toBe(policy.control.hint)
+
+  const verified = stubAsk({
+    "control::claim": { type: "noul", noul: 0.9 },
+    "control::check": { type: "noul", noul: 0.9 },
+  })
+  expect(
+    await decideVerification(verified.ask, { messages: claimMessages("Done. Tests pass.", "42 pass, 0 fail") }),
+  ).toBeNull()
+
+  const notClaimed = stubAsk({
+    "control::claim": { type: "noul", noul: 0.1 },
+    "control::check": { type: "noul", noul: 0.1 },
+  })
+  expect(await decideVerification(notClaimed.ask, { messages: claimMessages("Working on it.") })).toBeNull()
+
+  const noPattern = stubAsk({})
+  expect(await decideVerification(noPattern.ask, { messages: claimMessages("Implementing now.") })).toBeNull()
+  expect(noPattern.calls.length).toBe(0)
+})
+
+test("decideVerification fails open on transport errors", async () => {
+  const broken = stubAsk(new Error("boom"))
+  expect(await decideVerification(broken.ask, { messages: claimMessages("Done.") })).toBeNull()
+})
+
+test("readOptions parses control options", () => {
+  expect(readOptions({}).control).toEqual({ verify: false })
+  expect(readOptions({ control: { verify: true } }).control).toEqual({ verify: true })
+})
+
+test("the verification hook appends the hint only for an unverified claim", async () => {
+  const mock = mockJevServer(() => ({
+    body: {
+      answers: {
+        "control::claim": { type: "noul", noul: 0.9 },
+        "control::check": { type: "noul", noul: 0.1 },
+      },
+      model: "~typesafe/jev-latest",
+      usage: { input_tokens: 1, output_tokens: 1 },
+    },
+  }))
+  try {
+    const hooks: Array<(event: unknown) => Promise<void> | void> = []
+    const plugin = (await import("../index")).default
+    await plugin.setup({
+      options: { apiKey: "test", serverURL: mock.serverURL, control: { verify: true }, tools: { enabled: false } },
+      session: {
+        hook: (name: string, callback: (event: unknown) => Promise<void> | void) => {
+          if (name === "context") hooks.push(callback)
+          return Promise.resolve({ dispose: async () => {} })
+        },
+      },
+    } as never)
+    expect(hooks.length).toBe(2)
+
+    const system: Array<{ type: string; text: string }> = []
+    for (const hook of hooks) {
+      await hook({
+        sessionID: "s1",
+        agent: "build",
+        system,
+        tools: { read: { description: "Read" } },
+        messages: claimMessages("Done — everything works."),
+      })
+    }
+    expect(system.some((part) => part.text === policy.control.hint)).toBe(true)
+
+    const other = mockJevServer(() => ({
+      body: {
+        answers: {
+          "control::claim": { type: "noul", noul: 0.9 },
+          "control::check": { type: "noul", noul: 0.9 },
+        },
+        model: "~typesafe/jev-latest",
+        usage: { input_tokens: 1, output_tokens: 1 },
+      },
+    }))
+    try {
+      const verifiedHooks: Array<(event: unknown) => Promise<void> | void> = []
+      await plugin.setup({
+        options: { apiKey: "test", serverURL: other.serverURL, control: { verify: true }, tools: { enabled: false } },
+        session: {
+          hook: (name: string, callback: (event: unknown) => Promise<void> | void) => {
+            if (name === "context") verifiedHooks.push(callback)
+            return Promise.resolve({ dispose: async () => {} })
+          },
+        },
+      } as never)
+      const quiet: Array<{ type: string; text: string }> = []
+      for (const hook of verifiedHooks) {
+        await hook({
+          sessionID: "s2",
+          agent: "build",
+          system: quiet,
+          tools: { read: { description: "Read" } },
+          messages: claimMessages("Done. Tests pass.", "42 pass, 0 fail"),
+        })
+      }
+      expect(quiet.some((part) => part.text === policy.control.hint)).toBe(false)
+    } finally {
+      other.server.stop(true)
+    }
+
+    const off: Array<{ type: string; text: string }> = []
+    const disabledHooks: Array<(event: unknown) => Promise<void> | void> = []
+    await plugin.setup({
+      options: { apiKey: "test", serverURL: mock.serverURL, tools: { enabled: false } },
+      session: {
+        hook: (name: string, callback: (event: unknown) => Promise<void> | void) => {
+          if (name === "context") disabledHooks.push(callback)
+          return Promise.resolve({ dispose: async () => {} })
+        },
+      },
+    } as never)
+    for (const hook of disabledHooks) {
+      await hook({
+        sessionID: "s3",
+        agent: "build",
+        system: off,
+        tools: { read: { description: "Read" } },
+        messages: claimMessages("Done — everything works."),
+      })
+    }
+    expect(off.some((part) => part.text === policy.control.hint)).toBe(false)
+  } finally {
+    mock.server.stop(true)
+  }
+})

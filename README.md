@@ -1,10 +1,14 @@
-# opencode-system-one
+# jev-for-all
 
-An OpenCode V2 plugin that pairs the System One model Jev (TypeSafe, reached through
-OpenRouter's alpha Decisions API) with a classic coding agent. Jev makes the fast,
-structured decisions — which skill to load, which tool subset this step needs — and the
-classic agent does the work. The agent starts building instead of deliberating: a smaller
-tool catalog, no tool-choice reasoning, and more reliable skill loads.
+**Jev for every agentic development workflow.** The home for using the System One model Jev
+(TypeSafe, reached through OpenRouter's alpha Decisions API) wherever an agent codes —
+OpenCode today, Claude Code and Hermes adapters next — so every workflow gets Jev's benefits
+from one shared contract.
+
+Shipped piece: an OpenCode V2 plugin that pairs Jev with a classic coding agent. Jev makes the
+fast, structured decisions — which skill to load, which tool subset this step needs — and the
+classic agent does the work. The agent starts building instead of deliberating: a smaller tool
+catalog, no tool-choice reasoning, and more reliable skill loads.
 
 ## Install and configure
 
@@ -12,7 +16,7 @@ tool catalog, no tool-choice reasoning, and more reliable skill loads.
 {
   "plugins": [
     {
-      "package": "opencode-system-one",
+      "package": "jev-for-all",
       "options": {
         "apiKey": "sk-or-...",        // or set OPENROUTER_API_KEY
         "model": "~typesafe/jev-latest",

@@ -86,7 +86,7 @@ compactions break prompt cache). Verdict: compaction is out of scope for this de
 ## Architecture
 
 ```
-opencode-system-one/
+jev-for-all/
 ├── index.ts, src/              OpenCode adapter + shared TS core (today's code)
 ├── spec/decisions.json         the decision contract: questions, criteria, thresholds
 ├── fixtures/conformance.jsonl  golden cases; both ports must pass

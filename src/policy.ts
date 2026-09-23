@@ -25,6 +25,12 @@ export interface SkillPolicy {
     gateProse: string
     fits: string
   }
+  criteria: {
+    withDescription: string
+    withoutDescription: string
+    withContent: string
+    contentChars: number
+  }
 }
 
 export interface ToolPolicy {
@@ -50,6 +56,10 @@ export interface ToolPolicy {
     available: string
     narrowed: string
     fallback: string
+  }
+  criteria: {
+    descriptionChars: number
+    emptyDescription: string
   }
 }
 

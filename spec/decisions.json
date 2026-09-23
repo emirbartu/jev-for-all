@@ -22,6 +22,12 @@
       "gateProcedure": "Would a careful expert answering this consult a specific documented procedure or set of commands, rather than answering from general understanding?",
       "gateProse": "Could a knowledgeable generalist fully satisfy this request in prose, with no tools, no documentation, and no access to the user's files or accounts?",
       "fits": "Does the skill '{{name}}' do the specific thing the user's request asks for?"
+    },
+    "criteria": {
+      "withDescription": "{{name}} — {{description}}",
+      "withoutDescription": "{{name}}",
+      "withContent": " — {{content}}",
+      "contentChars": 700
     }
   },
   "tools": {
@@ -44,6 +50,10 @@
       "available": "Available now: {{tools}}.",
       "narrowed": "The tool list is already narrowed for this step; do not deliberate about tool choice, act.",
       "fallback": "If none of these fit, say what you need in your reply instead of guessing."
+    },
+    "criteria": {
+      "descriptionChars": 300,
+      "emptyDescription": "{{name}}"
     }
   },
   "cache": { "max": 200, "ttlMs": 600000 },

@@ -730,3 +730,66 @@ test("conformance fixtures pass against the TS core", async () => {
   expect(result.total).toBe(9)
   expect(result.passed).toBe(9)
 })
+
+test("skill rank criteria use the contract wording", async () => {
+  const roster = [
+    { id: "pptx-author", name: "pptx-author", description: "Author decks", content: "Use python-pptx" },
+    { id: "bare-skill", name: "bare-skill", content: "" },
+  ]
+  const { ask, calls } = stubAsk({
+    which: { type: "choice", choice: "pptx-author", probabilities: { "pptx-author": 0.9, "bare-skill": 0.1 }, confidence: 0.9 },
+    ...openGate,
+  })
+  await selectSkill(ask, { request: "build me a deck", skills: roster, config: { rerank: false } })
+  const questions = (calls[0] as { questions: Record<string, { criteria: Record<string, string> }> }).questions
+  expect(questions[policy.skills.ids.rank].criteria).toEqual({
+    "pptx-author": "pptx-author — Author decks",
+    "bare-skill": "bare-skill",
+  })
+})
+
+test("skill rerank criteria append the content suffix", async () => {
+  const roster = [
+    { id: "pptx-author", name: "pptx-author", description: "Author decks", content: "x".repeat(750) },
+    { id: "pptx-edit", name: "pptx-edit", description: "Edit decks", content: "Use the editor" },
+  ]
+  const { ask, calls } = stubAsk(
+    {
+      which: { type: "choice", choice: "pptx-author", probabilities: { "pptx-author": 0.6, "pptx-edit": 0.4 }, confidence: 0.9 },
+      ...openGate,
+    },
+    {
+      which: { type: "choice", choice: "pptx-edit", probabilities: { "pptx-author": 0.4, "pptx-edit": 0.6 }, confidence: 0.9 },
+      "fits::pptx-author": { type: "noul", noul: 0.2 },
+      "fits::pptx-edit": { type: "noul", noul: 0.8 },
+    },
+  )
+  await selectSkill(ask, { request: "edit my deck", skills: roster, config: { rerank: "auto", rerankAbove: 1 } })
+  const second = calls[1] as { questions: Record<string, { criteria: Record<string, string> }> }
+  expect(second.questions[policy.skills.ids.rerank].criteria).toEqual({
+    "pptx-author": `pptx-author — Author decks — ${"x".repeat(700)}`,
+    "pptx-edit": "pptx-edit — Edit decks — Use the editor",
+  })
+})
+
+test("tool criteria use the contract wording and fallback", async () => {
+  const { ask, calls } = stubAsk({
+    next: { type: "choice", choice: "read", probabilities: { read: 1 }, confidence: 1 },
+    needs_tool: { type: "noul", noul: 0.9 },
+  })
+  await routeTools(ask, {
+    state: "hi",
+    catalog: {
+      read: { description: "Read a file" },
+      empty: { description: "" },
+      long: { description: "d".repeat(350) },
+    },
+    config: { alwaysVisible: [] },
+  })
+  const questions = (calls[0] as { questions: Record<string, { criteria: Record<string, string> }> }).questions
+  expect(questions[policy.tools.ids.next].criteria).toEqual({
+    read: "Read a file",
+    empty: "empty",
+    long: "d".repeat(300),
+  })
+})

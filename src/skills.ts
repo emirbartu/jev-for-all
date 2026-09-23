@@ -38,12 +38,15 @@ export async function selectSkill(
 
   const ids = policy.skills.ids
   const questions = policy.skills.questions
+  const criteria = policy.skills.criteria
+  const label = (skill: SkillLike): string =>
+    skill.description
+      ? formatTemplate(criteria.withDescription, { name: skill.name, description: skill.description })
+      : formatTemplate(criteria.withoutDescription, { name: skill.name })
 
   try {
     const state = { request: input.request }
-    const roster = Object.fromEntries(
-      skills.map((skill) => [skill.id, `${skill.name}${skill.description ? ` — ${skill.description}` : ""}`]),
-    )
+    const roster = Object.fromEntries(skills.map((skill) => [skill.id, label(skill)]))
     const first = await ask({
       state,
       questions: {
@@ -79,14 +82,14 @@ export async function selectSkill(
         .slice(0, Math.max(1, config.shortlist))
 
       if (shortlist.length > 1) {
-        const criteria = Object.fromEntries(
+        const rerankCriteria = Object.fromEntries(
           shortlist.map((id) => {
             const skill = byId.get(id)!
-            return [id, `${skill.name}${skill.description ? ` — ${skill.description}` : ""} — ${skill.content.slice(0, 700)}`]
+            return [id, label(skill) + formatTemplate(criteria.withContent, { content: skill.content.slice(0, criteria.contentChars) })]
           }),
         )
         const rerankQuestions: Record<string, Question> = {
-          [ids.rerank]: { type: "choice", instructions: questions.rerank, criteria },
+          [ids.rerank]: { type: "choice", instructions: questions.rerank, criteria: rerankCriteria },
         }
         for (const id of shortlist) {
           rerankQuestions[formatTemplate(ids.fits, { id })] = {

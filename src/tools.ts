@@ -70,7 +70,10 @@ export async function routeTools(
 
   try {
     const criteria = Object.fromEntries(
-      names.map((name) => [name, (input.catalog[name]?.description ?? "").slice(0, 300) || name]),
+      names.map((name) => {
+        const description = (input.catalog[name]?.description ?? "").slice(0, policy.tools.criteria.descriptionChars)
+        return [name, description === "" ? formatTemplate(policy.tools.criteria.emptyDescription, { name }) : description]
+      }),
     )
     const answers = await ask({
       state: input.state,

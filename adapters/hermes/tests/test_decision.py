@@ -129,5 +129,41 @@ class DecisionTest(unittest.TestCase):
         self.assertEqual(meta["input_tokens"], 12)
 
 
+class PluginRegistrationTest(unittest.TestCase):
+    def test_register_wires_only_pre_llm_call_and_returns_context(self):
+        import importlib
+        import os
+        import tempfile
+        from unittest import mock
+
+        with tempfile.TemporaryDirectory() as home, mock.patch.dict(os.environ, {"HERMES_HOME": home}, clear=False):
+            os.environ.pop("OPENROUTER_API_KEY", None)
+            import system_one as plugin
+
+            importlib.reload(plugin)
+
+            hooks = {}
+
+            class FakeCtx:
+                def register_hook(self, name, callback):
+                    hooks[name] = callback
+
+                def get_config(self):
+                    return {}
+
+            plugin.register(FakeCtx())
+            self.assertEqual(list(hooks), ["pre_llm_call"])
+            self.assertIsNone(
+                hooks["pre_llm_call"](
+                    session_id="s",
+                    user_message="hi",
+                    conversation_history=[],
+                    is_first_turn=True,
+                    model="m",
+                    platform="cli",
+                )
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

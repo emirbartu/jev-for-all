@@ -350,7 +350,7 @@ test("setup registers the prompt and context hooks", async () => {
     },
   }
   const cleanup = await plugin.setup(context as never)
-  expect(names).toEqual(["prompt", "context"])
+  expect(names).toEqual(["prompt", "context", "context"])
   await cleanup?.()
 })
 
@@ -437,13 +437,13 @@ test("context hook routes tools end to end", async () => {
     },
   }))
   try {
-    let contextHook: ((event: unknown) => Promise<void> | void) | undefined
+    let contextHooks: Array<(event: unknown) => Promise<void> | void> = []
     const plugin = (await import("../index")).default
     await plugin.setup({
       options: { apiKey: "test", serverURL: mock.serverURL },
       session: {
         hook: (name: string, callback: (event: unknown) => Promise<void> | void) => {
-          if (name === "context") contextHook = callback
+          if (name === "context") contextHooks.push(callback)
           return Promise.resolve({ dispose: async () => {} })
         },
       },
@@ -456,7 +456,9 @@ test("context hook routes tools end to end", async () => {
       browser: { description: "Browse" },
     }
     const system: Array<{ type: string; text: string }> = []
-    await contextHook!({ sessionID: "s1", agent: "build", messages: [], tools, system })
+    for (const hook of contextHooks) {
+      await hook({ sessionID: "s1", agent: "build", messages: [], tools, system })
+    }
     expect(Object.keys(tools).sort()).toEqual(["edit", "grep", "read"])
     expect(system[0].text).toContain("Start with: grep")
   } finally {

@@ -3,6 +3,7 @@ import { createJev, type Ask } from "./src/jev"
 import { applySkillDecision, defaultSkillRouting, selectSkill, type SkillRoutingConfig } from "./src/skills"
 import { createRecorder, summarize, type UsageSample } from "./src/observe"
 import { browserTool, defaultBrowser, type BrowserConfig } from "./src/browser"
+import { decideVerification, renderVerifyState } from "./src/verify"
 import {
   applyToolDecision,
   defaultToolRouting,
@@ -36,6 +37,7 @@ export interface ResolvedOptions {
   skills: ResolvedSkills
   tools: ResolvedTools
   observe: ResolvedObserve
+  control: { verify: boolean }
   browser: BrowserConfig
 }
 
@@ -70,6 +72,7 @@ export function readOptions(raw: Record<string, unknown>): ResolvedOptions {
   }
   const agents = strings("agents", raw.agents, [])
   const observe = (raw.observe ?? {}) as Record<string, unknown>
+  const control = (raw.control ?? {}) as Record<string, unknown>
   const browser = (raw.browser ?? {}) as Record<string, unknown>
   const text = (key: string, value: unknown, fallback: string) => {
     if (value === undefined) return fallback
@@ -116,6 +119,9 @@ export function readOptions(raw: Record<string, unknown>): ResolvedOptions {
       enabled: bool("observe.enabled", observe.enabled, false),
       file: typeof observe.file === "string" ? observe.file : undefined,
       retain: number("observe.retain", observe.retain, 20),
+    },
+    control: {
+      verify: bool("control.verify", control.verify, false),
     },
     browser: {
       enabled: bool("browser.enabled", browser.enabled, defaultBrowser.enabled),
@@ -191,6 +197,7 @@ export default Plugin.define({
       : undefined
     const skillCache = createCache<{ id: string } | null>()
     const toolCache = createCache<ToolDecision | null>()
+    const verifyCache = createCache<{ hint: string } | null>()
     const log = (...args: unknown[]) => {
       if (options.debug) console.log("[system-one]", ...args)
     }
@@ -282,6 +289,23 @@ export default Plugin.define({
           if (decision) applyToolDecision(event.tools, event.system, decision)
         } catch (error) {
           warnOnce(event.sessionID, "tool routing failed", error)
+        }
+      }),
+      await ctx.session.hook("context", async (event) => {
+        if (!options.control.verify || !agentEnabled(event.agent)) return
+        if (!ask) return
+        try {
+          const state = renderVerifyState(event.messages as never)
+          const key = `verify:${event.sessionID}:${hashKey(state)}`
+          let decision = verifyCache.get(key)
+          if (decision === undefined) {
+            decision = await decideVerification(askFor(event.sessionID), { messages: event.messages as never })
+            verifyCache.set(key, decision)
+            log("verify decision", decision ? "hint" : "skip")
+          }
+          if (decision) event.system.push({ type: "text", text: decision.hint })
+        } catch (error) {
+          warnOnce(event.sessionID, "verification gate failed", error)
         }
       }),
     ]

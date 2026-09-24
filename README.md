@@ -4,6 +4,8 @@
 picks the skill to load, the tool subset for the step, and every browser move; the coding agent
 just builds.
 
+**Why we built it this way — and where Jev wins or loses: [When Jev wins](WHERE-JEV-WINS.md).**
+
 ## What this is
 
 Jev is TypeSafe's System One model, reached through OpenRouter's alpha Decisions API. It is not

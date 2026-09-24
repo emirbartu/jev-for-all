@@ -143,5 +143,4 @@ run. Next: the routing-quality design pass.
 
 ---
 
-Jev is a TypeSafe model; this is an independent integration. Not affiliated with the OpenCode
-team.
+Jev is a TypeSafe model; this is an independent integration. This repo is not affiliated with any organizations or teams.

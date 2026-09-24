@@ -5,12 +5,15 @@ api_version: 1
 license: MIT
 description: >-
   Jev-routed skill selection for Hermes: pre_llm_call injects at most one skill
-  per turn, or a routed-externally line when none applies. It never touches the
-  system prompt or the toolset, so the prompt cache stays intact.
+  per turn, or a routed-externally line when none applies. When enabled,
+  pre_verify nudges once when a completion claim lacks a passing check. It never
+  touches the system prompt or the toolset, so the prompt cache stays intact.
 provides_hooks:
   - pre_llm_call
+  - pre_verify
 config_schema:
   model: {type: str, default: "~typesafe/jev-latest", description: "Jev model slug"}
   max_calls_per_session: {type: int, default: 500, description: "Stop calling Jev past this many calls in one session"}
   timeout_ms: {type: int, default: 2000, description: "Per-request timeout in milliseconds"}
+  verify: {type: bool, default: false, description: "pre_verify: nudge once when a completion claim lacks a passing check"}
   skill_dirs: {type: list, default: [], description: "Skill directories to scan; empty uses $HERMES_HOME/skills"}

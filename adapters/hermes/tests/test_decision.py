@@ -4,6 +4,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -192,6 +193,76 @@ class DecisionTest(unittest.TestCase):
         )
         self.assertEqual(decision.decide(ask, "do A", roster), ("no-change", None))
 
+    def test_verification_gate_states(self):
+        control = decision.POLICY["control"]
+        hint = control["hint"]
+
+        def answers(claim, ran, passed):
+            return stub_ask(
+                {
+                    "control::claim": {"type": "noul", "noul": claim},
+                    "control::ran": {"type": "noul", "noul": ran},
+                    "control::passed": {"type": "noul", "noul": passed},
+                }
+            )
+
+        # No run: completion claimed, no check at all → nudge.
+        ask, calls = answers(0.9, 0.1, 0.1)
+        self.assertEqual(
+            decision.decide_verification(ask, response="All done.", changed_paths=["src/a.py"]), hint
+        )
+        self.assertEqual(calls[0][0], {"tail": "assistant: All done.\nchanged: src/a.py"})
+        self.assertEqual(calls[0][1]["control::claim"]["instructions"], control["questions"]["claim"])
+
+        # Red run: a check ran but failed → nudge.
+        ask, _ = answers(0.9, 0.9, 0.1)
+        self.assertEqual(decision.decide_verification(ask, response="Fixed it.", changed_paths=[]), hint)
+
+        # Stale run: ran before the change, so it did not pass for this change → nudge.
+        ask, _ = answers(0.9, 0.9, 0.4)
+        self.assertEqual(decision.decide_verification(ask, response="Finished.", changed_paths=[]), hint)
+
+        # Green run: check ran and passed → hold.
+        ask, _ = answers(0.9, 0.9, 0.9)
+        self.assertIsNone(decision.decide_verification(ask, response="Complete.", changed_paths=[]))
+
+        # Config override: a higher claim floor turns the claim into a hold.
+        ask, _ = answers(0.9, 0.1, 0.1)
+        self.assertIsNone(
+            decision.decide_verification(ask, response="Done.", changed_paths=[], config={"claimMin": 0.95})
+        )
+
+    def test_verification_gate_skips_non_claims_and_fails_open(self):
+        noisy = {
+            "control::claim": {"type": "noul", "noul": 0.9},
+            "control::ran": {"type": "noul", "noul": 0.1},
+            "control::passed": {"type": "noul", "noul": 0.1},
+        }
+        # Not a completion claim → no Jev call at all.
+        ask, calls = stub_ask(noisy)
+        self.assertIsNone(
+            decision.decide_verification(ask, response="Here is what I found in the file.", changed_paths=[])
+        )
+        self.assertEqual(calls, [])
+
+        # Jev says it is not a completion claim → hold.
+        ask, _ = stub_ask(
+            {
+                "control::claim": {"type": "noul", "noul": 0.2},
+                "control::ran": {"type": "noul", "noul": 0.1},
+                "control::passed": {"type": "noul", "noul": 0.1},
+            }
+        )
+        self.assertIsNone(decision.decide_verification(ask, response="Done.", changed_paths=[]))
+
+        # Malformed or partial answer → hold.
+        ask, _ = stub_ask({"control::claim": {"type": "noul"}})
+        self.assertIsNone(decision.decide_verification(ask, response="Done.", changed_paths=[]))
+
+        # Transport error / timeout → hold.
+        ask, _ = stub_ask(TimeoutError("slow"))
+        self.assertIsNone(decision.decide_verification(ask, response="Done.", changed_paths=[]))
+
     def test_transport_parses_answers_and_reports_meta(self):
         class FakeResponse:
             def __init__(self, body):
@@ -253,8 +324,89 @@ class DecisionTest(unittest.TestCase):
         self.assertEqual(decision.decide(ask, "do A", roster), ("no-change", None))
 
 
+class VerifyHookTest(unittest.TestCase):
+    """pre_verify handler: off by default, one nudge per turn, logged, fail-open."""
+
+    def setUp(self):
+        import importlib
+
+        import system_one as plugin
+
+        self.plugin = plugin
+        importlib.reload(plugin)
+
+    class Ctx:
+        def __init__(self, config=None):
+            self.config = config or {}
+
+        def get_config(self, key, default=None):
+            return self.config.get(key, default)
+
+    def _run(self, tmp, config, *, response="All tests pass.", attempt=0, changed_paths=("src/a.py",), ask=None):
+        with mock.patch.object(self.plugin, "_plugin_data_dir", lambda: Path(tmp)), mock.patch.dict(
+            os.environ, {"OPENROUTER_API_KEY": "k"}, clear=False
+        ), mock.patch.object(decision, "ask_openrouter", ask or (lambda *args, **kwargs: {})):
+            return self.plugin._handle_verify(
+                self.Ctx(config),
+                session_id="s",
+                attempt=attempt,
+                final_response=response,
+                changed_paths=list(changed_paths),
+            )
+
+    def test_verify_hook_is_off_by_default_and_self_throttles(self):
+        calls = []
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(self._run(tmp, {}, ask=lambda *a, **k: calls.append(1) or {}))
+            self.assertIsNone(self._run(tmp, {"verify": True}, attempt=1, ask=lambda *a, **k: calls.append(1) or {}))
+            self.assertEqual(calls, [])
+
+    def test_verify_hook_nudges_once_and_logs(self):
+        answers = {
+            "control::claim": {"type": "noul", "noul": 0.9},
+            "control::ran": {"type": "noul", "noul": 0.1},
+            "control::passed": {"type": "noul", "noul": 0.1},
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._run(tmp, {"verify": True}, ask=lambda *a, **k: answers)
+            self.assertEqual(result, {"action": "continue", "message": decision.POLICY["control"]["hint"]})
+            record = json.loads((Path(tmp) / "decisions.jsonl").read_text().splitlines()[0])
+            self.assertEqual(record["hook"], "pre_verify")
+            self.assertEqual(record["chosen"], "nudge")
+
+            # A green run holds: the handler stays out of the way.
+            green = {
+                "control::claim": {"type": "noul", "noul": 0.9},
+                "control::ran": {"type": "noul", "noul": 0.9},
+                "control::passed": {"type": "noul", "noul": 0.9},
+            }
+            self.assertIsNone(self._run(tmp, {"verify": True}, ask=lambda *a, **k: green))
+
+    def test_verify_hook_fails_open_on_transport_error(self):
+        def boom(*args, **kwargs):
+            raise TimeoutError("slow")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(self._run(tmp, {"verify": True}, ask=boom))
+
+    def test_verify_hook_respects_the_session_call_cap(self):
+        calls = []
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "decisions.jsonl").write_text('{"kind": "decision", "sessionID": "s"}\n')
+            result = self._run(
+                tmp,
+                {"verify": True, "max_calls_per_session": 1},
+                ask=lambda *a, **k: calls.append(1) or {},
+            )
+            self.assertIsNone(result)
+            self.assertEqual(calls, [])
+            records = [json.loads(line) for line in (Path(tmp) / "decisions.jsonl").read_text().splitlines()]
+            self.assertEqual(records[-1]["event"], "cap")
+            self.assertEqual(records[-1]["hook"], "pre_verify")
+
+
 class PluginRegistrationTest(unittest.TestCase):
-    def test_register_wires_only_pre_llm_call_and_returns_context(self):
+    def test_register_wires_both_hooks_and_returns_context(self):
         import importlib
         import os
         import tempfile
@@ -276,7 +428,7 @@ class PluginRegistrationTest(unittest.TestCase):
                     return {}
 
             plugin.register(FakeCtx())
-            self.assertEqual(list(hooks), ["pre_llm_call"])
+            self.assertEqual(list(hooks), ["pre_llm_call", "pre_verify"])
             self.assertIsNone(
                 hooks["pre_llm_call"](
                     session_id="s",
@@ -285,6 +437,17 @@ class PluginRegistrationTest(unittest.TestCase):
                     is_first_turn=True,
                     model="m",
                     platform="cli",
+                )
+            )
+            self.assertIsNone(
+                hooks["pre_verify"](
+                    session_id="s",
+                    platform="cli",
+                    model="m",
+                    coding=True,
+                    attempt=0,
+                    final_response="Done.",
+                    changed_paths=["a.py"],
                 )
             )
 

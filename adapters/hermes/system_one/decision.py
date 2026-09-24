@@ -244,6 +244,62 @@ def decide(ask: Ask | None, request: str, skills: Iterable[dict]) -> tuple[str, 
     return ("none", None) if state["confident_none"] else ("no-change", None)
 
 
+CLAIM_PATTERN = re.compile(
+    r"\b(done|complete|completed|finished|fixed|all tests pass|it works|ready to merge)\b", re.IGNORECASE
+)
+
+
+def looks_like_claim(text: str) -> bool:
+    return bool(CLAIM_PATTERN.search(text))
+
+
+def render_verify_state(response: str, changed_paths: Sequence[str] = (), budget: int = 2000) -> str:
+    lines = [f"assistant: {response}"]
+    if changed_paths:
+        lines.append("changed: " + ", ".join(changed_paths))
+    text = "\n".join(lines)
+    return text[-budget:]
+
+
+def decide_verification(
+    ask: Ask,
+    *,
+    response: str,
+    changed_paths: Sequence[str] = (),
+    config: dict | None = None,
+) -> str | None:
+    """A completion claim without a passing check returns the contract's nudge, else None."""
+    control = POLICY["control"]
+    if not looks_like_claim(response):
+        return None
+    overrides = config or {}
+    claim_min = overrides.get("claimMin", control["claimMin"])
+    ran_min = overrides.get("ranMin", control["ranMin"])
+    pass_min = overrides.get("passMin", control["passMin"])
+    questions = control["questions"]
+    try:
+        answers = ask(
+            {"tail": render_verify_state(response, changed_paths)},
+            {
+                "control::claim": {"type": "noul", "instructions": questions["claim"]},
+                "control::ran": {"type": "noul", "instructions": questions["checkRan"]},
+                "control::passed": {"type": "noul", "instructions": questions["checkPassed"]},
+            },
+        )
+        claim = as_noul(answers.get("control::claim"))
+        ran = as_noul(answers.get("control::ran"))
+        passed = as_noul(answers.get("control::passed"))
+        if claim is None or ran is None or passed is None:
+            return None
+        if claim < claim_min:
+            return None
+        if ran >= ran_min and passed >= pass_min:
+            return None
+        return control["hint"]
+    except Exception:
+        return None
+
+
 def injection_for(skill: dict) -> str:
     header = f"<skill_relevance>\nRouted skill: {skill['name']} ({skill['id']}).\n</skill_relevance>"
     cap = POLICY["skills"]["injection"]["chars"]

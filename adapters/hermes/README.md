@@ -48,6 +48,15 @@ user's step: it writes `plugins.enabled` into `${HERMES_HOME:-$HOME/.hermes}/con
 The injection lands in the current turn's user message only. The system prompt and the toolset
 are never modified.
 
+## Verification nudge (`pre_verify`, off by default)
+
+When the `verify` setting is on, the `pre_verify` hook runs after a turn that edited code: if
+the final response claims completion and Jev judges that no check has run and passed since the
+change, the hook returns one continue directive — the contract's `control.hint` — asking the
+agent to run the relevant check (or state that none applies). One nudge per turn
+(`attempt == 0`; Hermes' `agent.max_verify_nudges` is the outer bound), never a block, and any
+failure leaves the turn exactly as it was.
+
 ## Settings
 
 Set under `plugins.entries.system-one.settings` in `config.yaml`, or through the Desktop
@@ -57,7 +66,8 @@ Capabilities → Plugins form (driven by `plugin.yaml`'s `config_schema`):
 | --- | --- | --- |
 | `model` | `~typesafe/jev-latest` | Jev model slug. |
 | `max_calls_per_session` | `500` (contract) | Stop calling Jev past this many calls in one session. |
-| `timeout_ms` | `1000` | Per-request timeout in milliseconds. |
+| `timeout_ms` | `2000` | Per-request timeout in milliseconds. |
+| `verify` | `false` | `pre_verify`: nudge once per turn when a completion claim lacks a passing check. |
 | `skill_dirs` | `[]` → `$HERMES_HOME/skills` | Skill directories to scan. |
 
 ## Decision log
@@ -66,20 +76,24 @@ Every Jev call appends one JSON line to `decisions.jsonl` **next to the module**
 checkout `adapters/hermes/system_one/decisions.jsonl`, installed
 `$HERMES_HOME/plugins/system-one/decisions.jsonl`. The line records the chosen skill (or
 `none` / `no-change`), the resolved model id, token usage, latency, and the per-session call
-count; cap and warn events are logged the same way.
+count; cap and warn events are logged the same way. `pre_verify` records carry
+`"hook": "pre_verify"` and `chosen` `nudge` or `hold`.
 
 ## Data egress
 
 The `pre_llm_call` hook sends the latest user message and the skill roster (names, ids,
 descriptions) to OpenRouter's decisions endpoint. When the contract's rerank runs, the first
-700 characters of each shortlisted skill's body are sent too. The injected skill body stays
-local, conversation history is not sent, and the decision log is local-only.
+700 characters of each shortlisted skill's body are sent too. When `verify` is enabled, the
+`pre_verify` hook sends the assistant's final response (tail-truncated to 2000 characters)
+plus the changed file paths. The injected skill body stays local, conversation history is not
+sent, and the decision log is local-only.
 
 ## Fail-open
 
-The hook never raises and never changes the request on failure: a missing `OPENROUTER_API_KEY`,
+The hooks never raise and never change the request on failure: a missing `OPENROUTER_API_KEY`,
 an empty roster, a timeout, a non-2xx, a malformed answer, an unknown skill id, or a
-low-confidence answer all leave Hermes' behavior exactly as it was.
+low-confidence answer all leave Hermes' behavior exactly as it was. The verification nudge
+fails the same way — a failed decision lets the turn finish.
 
 ## Proof
 

@@ -64,7 +64,7 @@ than Claude Fable, median 0.75 s vs 3.59 s / 4.31 s.
 The kill list. Each candidate was implemented or specced, measured, and killed when the numbers
 did not hold.
 
-- **Compaction**: 75.5% vs 78.9% for the built-in (115K vs 55K tokens). Killed.
+- **Compaction**: Jev 75.5% @ 115K retained tokens per turn vs the built-in summary 78.9% @ 55K — it lost on recall and held 2.1× the context. Killed.
 - **Rank-time "no skill fits"**: cut spurious picks 6 → 4 but broke 7 genuine routes (47/13 net).
   Killed.
 - **CI-failure triage**: 48/50 CI runs red, the same "5 failed / 33 passed" every run, 0 reruns

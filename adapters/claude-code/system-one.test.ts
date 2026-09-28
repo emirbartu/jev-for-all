@@ -243,3 +243,304 @@ test("the hook is silent and exits 0 without an API key", () => {
   expect(proc.exitCode).toBe(0)
   expect(proc.stdout.toString().trim()).toBe("")
 })
+
+import { readFileSync } from "node:fs"
+import { decideVerification, verifyEnabled, verifyMessages } from "./lib/verify"
+import { parseSamples, summarize } from "../../src/observe"
+import { policy } from "../../src/policy"
+
+const HOOK = join(import.meta.dir, "hooks", "system-one.ts")
+
+function hookEnv(extra: Record<string, string>): Record<string, string> {
+  return { ...(process.env as Record<string, string>), ...extra }
+}
+
+const unverified = {
+  "control::claim": { type: "noul", noul: 0.9 },
+  "control::ran": { type: "noul", noul: 0.1 },
+  "control::passed": { type: "noul", noul: 0.1 },
+}
+
+const verified = {
+  "control::claim": { type: "noul", noul: 0.9 },
+  "control::ran": { type: "noul", noul: 0.9 },
+  "control::passed": { type: "noul", noul: 0.9 },
+}
+
+test("verifyEnabled is off by default and reads the contract default", () => {
+  expect(verifyEnabled({})).toBe(policy.control.verify)
+  expect(verifyEnabled({})).toBe(false)
+  for (const value of ["1", "true", "TRUE", "yes", "on"]) {
+    expect(verifyEnabled({ SYSTEM_ONE_VERIFY: value })).toBe(true)
+  }
+  for (const value of ["0", "false", "no", "off", "", "maybe"]) {
+    expect(verifyEnabled({ SYSTEM_ONE_VERIFY: value })).toBe(false)
+  }
+})
+
+test("decideVerification nudges a completion claim with no passing check and stays quiet otherwise", async () => {
+  const claim = [{ role: "assistant", content: [{ type: "text", text: "All tests pass, the fix is complete." }] }]
+  const hint = await decideVerification(stubAsk(unverified).ask, { messages: claim })
+  expect(hint).toEqual({ hint: policy.control.hint })
+
+  const checked = await decideVerification(stubAsk(verified).ask, { messages: claim })
+  expect(checked).toBeNull()
+
+  const noClaim = [{ role: "assistant", content: [{ type: "text", text: "Here is the function you asked about." }] }]
+  expect(await decideVerification(stubAsk(unverified).ask, { messages: noClaim })).toBeNull()
+})
+
+test("decideVerification fails open on transport errors and malformed answers", async () => {
+  const claim = [{ role: "assistant", content: [{ type: "text", text: "done" }] }]
+  expect(await decideVerification(stubAsk(new Error("boom")).ask, { messages: claim })).toBeNull()
+  expect(await decideVerification(stubAsk({}).ask, { messages: claim })).toBeNull()
+  expect(
+    await decideVerification(
+      stubAsk({ "control::claim": { type: "noul", noul: 0.9 }, "control::ran": { type: "noul", noul: 0.9 } }).ask,
+      { messages: claim },
+    ),
+  ).toBeNull()
+
+  const belowThreshold = {
+    "control::claim": { type: "noul", noul: policy.control.claimMin - 0.1 },
+    "control::ran": { type: "noul", noul: 0.1 },
+    "control::passed": { type: "noul", noul: 0.1 },
+  }
+  expect(await decideVerification(stubAsk(belowThreshold).ask, { messages: claim })).toBeNull()
+})
+
+test("verifyMessages appends the final assistant message and skips unreadable transcripts", () => {
+  const transcript = join(tmpdir(), `system-one-transcript-${process.pid}.jsonl`)
+  writeFileSync(
+    transcript,
+    [
+      "not json at all",
+      JSON.stringify({ type: "user", message: { role: "user", content: "fix the bug" } }),
+      JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "working" }] } }),
+      JSON.stringify({ type: "summary", summary: "ignored" }),
+      JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "tool_use", name: "Bash" }] } }),
+    ].join("\n"),
+  )
+  const messages = verifyMessages({ transcript_path: transcript, last_assistant_message: "It is done." })
+  expect(messages.map((message) => message.role)).toEqual(["user", "assistant", "assistant", "assistant"])
+  expect(messages.at(-1)?.content).toEqual([{ type: "text", text: "It is done." }])
+
+  expect(verifyMessages({ transcript_path: join(tmpdir(), "does-not-exist-xyz.jsonl") })).toEqual([])
+  expect(verifyMessages({})).toEqual([])
+})
+
+test("the Stop hook blocks a completion claim when verify is on and the check is missing", async () => {
+  const stateDir = mkdtempSync(join(tmpdir(), "system-one-stop-"))
+  const { serverURL, server } = startMockJev(unverified)
+  try {
+    const proc = Bun.spawn(["bun", "run", HOOK], {
+      stdin: new Blob([
+        JSON.stringify({
+          hook_event_name: "Stop",
+          session_id: "sess-stop",
+          last_assistant_message: "All tests pass, the migration is complete.",
+          stop_hook_active: false,
+        }),
+      ]),
+      env: hookEnv({
+        OPENROUTER_API_KEY: "test",
+        SYSTEM_ONE_STATE_DIR: stateDir,
+        SYSTEM_ONE_SERVER_URL: serverURL,
+        SYSTEM_ONE_VERIFY: "1",
+      }),
+      stdout: "pipe",
+    })
+    const stdout = await new Response(proc.stdout).text()
+    expect(await proc.exited).toBe(0)
+    const output = JSON.parse(stdout)
+    expect(output.decision).toBe("block")
+    expect(output.reason).toBe(policy.control.hint)
+  } finally {
+    server.stop(true)
+  }
+})
+
+test("the Stop hook stays silent when a check ran and passed", async () => {
+  const stateDir = mkdtempSync(join(tmpdir(), "system-one-stop-ok-"))
+  const { serverURL, server } = startMockJev(verified)
+  try {
+    const proc = Bun.spawnSync(["bun", "run", HOOK], {
+      stdin: new Blob([
+        JSON.stringify({
+          hook_event_name: "Stop",
+          session_id: "sess-stop-ok",
+          last_assistant_message: "All tests pass, the migration is complete.",
+        }),
+      ]),
+      env: hookEnv({
+        OPENROUTER_API_KEY: "test",
+        SYSTEM_ONE_STATE_DIR: stateDir,
+        SYSTEM_ONE_SERVER_URL: serverURL,
+        SYSTEM_ONE_VERIFY: "1",
+      }),
+      stdout: "pipe",
+    })
+    expect(proc.exitCode).toBe(0)
+    expect(proc.stdout.toString().trim()).toBe("")
+    const lines = readFileSync(join(stateDir, "decisions.jsonl"), "utf8").trim().split("\n")
+    expect(JSON.parse(lines[0]!)).toMatchObject({ kind: "decision", hook: "Stop", chosen: "hold" })
+  } finally {
+    server.stop(true)
+  }
+})
+
+test("the Stop hook is inert by default, while active, or without an API key", () => {
+  const stateDir = mkdtempSync(join(tmpdir(), "system-one-stop-off-"))
+  const payload = JSON.stringify({
+    hook_event_name: "Stop",
+    session_id: "sess-off",
+    last_assistant_message: "All tests pass, the migration is complete.",
+  })
+  const run = (env: Record<string, string>) =>
+    Bun.spawnSync(["bun", "run", HOOK], {
+      stdin: new Blob([payload]),
+      env: hookEnv({ SYSTEM_ONE_STATE_DIR: stateDir, OPENROUTER_API_KEY: "test", SYSTEM_ONE_SERVER_URL: "", ...env }),
+      stdout: "pipe",
+    })
+
+  const off = run({})
+  expect(off.exitCode).toBe(0)
+  expect(off.stdout.toString().trim()).toBe("")
+
+  const noKey = run({ SYSTEM_ONE_VERIFY: "1", OPENROUTER_API_KEY: "" })
+  expect(noKey.exitCode).toBe(0)
+  expect(noKey.stdout.toString().trim()).toBe("")
+
+  const unreachable = run({ SYSTEM_ONE_VERIFY: "1", SYSTEM_ONE_SERVER_URL: "http://127.0.0.1:1" })
+  expect(unreachable.exitCode).toBe(0)
+  expect(unreachable.stdout.toString().trim()).toBe("")
+})
+
+test("the Stop hook never blocks twice for one turn", async () => {
+  const stateDir = mkdtempSync(join(tmpdir(), "system-one-stop-loop-"))
+  const { serverURL, server } = startMockJev(unverified)
+  try {
+    const proc = Bun.spawn(["bun", "run", HOOK], {
+      stdin: new Blob([
+        JSON.stringify({
+          hook_event_name: "Stop",
+          session_id: "sess-loop",
+          last_assistant_message: "All tests pass.",
+          stop_hook_active: true,
+        }),
+      ]),
+      env: hookEnv({
+        OPENROUTER_API_KEY: "test",
+        SYSTEM_ONE_STATE_DIR: stateDir,
+        SYSTEM_ONE_SERVER_URL: serverURL,
+        SYSTEM_ONE_VERIFY: "1",
+      }),
+      stdout: "pipe",
+    })
+    expect(await new Response(proc.stdout).text()).toBe("")
+    expect(await proc.exited).toBe(0)
+  } finally {
+    server.stop(true)
+  }
+})
+
+test("hooks.json wires the Stop event to the same hook command", () => {
+  const hooks = JSON.parse(readFileSync(join(import.meta.dir, "hooks", "hooks.json"), "utf8")) as {
+    hooks: Record<string, Array<{ matcher?: string; hooks: Array<{ command: string }> }>>
+  }
+  expect(hooks.hooks.Stop?.[0]?.hooks[0]?.command).toContain("hooks/system-one.ts")
+  expect(hooks.hooks.UserPromptSubmit?.[0]?.hooks[0]?.command).toContain("hooks/system-one.ts")
+  expect(hooks.hooks.PreToolUse?.[0]?.matcher).toBe("Skill")
+})
+
+test("every user message appends one usage line beside the decision lines", async () => {
+  const stateDir = mkdtempSync(join(tmpdir(), "system-one-usage-"))
+  const skills = mkdtempSync(join(tmpdir(), "system-one-usage-skills-"))
+  mkdirSync(join(skills, "pptx-author"), { recursive: true })
+  writeFileSync(join(skills, "pptx-author", "SKILL.md"), "---\nname: pptx-author\n---\n\nbody\n")
+  const { serverURL, server } = startMockJev()
+  try {
+    for (const prompt of ["build me a deck", "now write the notes"]) {
+      const proc = Bun.spawn(["bun", "run", HOOK], {
+        stdin: new Blob([
+          JSON.stringify({ hook_event_name: "UserPromptSubmit", session_id: "sess-usage", prompt, cwd: process.cwd() }),
+        ]),
+        env: hookEnv({
+          OPENROUTER_API_KEY: "test",
+          SYSTEM_ONE_STATE_DIR: stateDir,
+          SYSTEM_ONE_SKILL_DIRS: skills,
+          SYSTEM_ONE_SERVER_URL: serverURL,
+        }),
+        stdout: "pipe",
+      })
+      await new Response(proc.stdout).text()
+      expect(await proc.exited).toBe(0)
+    }
+  } finally {
+    server.stop(true)
+  }
+
+  const lines = readFileSync(join(stateDir, "decisions.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line))
+  const usage = lines.filter((line) => line.kind === "usage")
+  expect(usage).toHaveLength(2)
+  expect(usage.map((line) => line.messageID)).toEqual(["sess-usage-1", "sess-usage-2"])
+  expect(usage[0]).toMatchObject({ harness: "claude-code", sessionID: "sess-usage", agent: "claude-code", model: "~typesafe/jev-1.13.0" })
+
+  const samples = parseSamples(readFileSync(join(stateDir, "decisions.jsonl"), "utf8"))
+  expect(samples).toHaveLength(2)
+  const summary = summarize(samples)
+  expect(summary.messages).toBe(2)
+  expect(summary.input).toBe(20)
+  expect(summary.output).toBe(4)
+})
+
+test("a usage line is written even when no decision is taken", () => {
+  const stateDir = mkdtempSync(join(tmpdir(), "system-one-usage-nokey-"))
+  const skills = mkdtempSync(join(tmpdir(), "system-one-usage-nokey-skills-"))
+  mkdirSync(join(skills, "pptx-author"), { recursive: true })
+  writeFileSync(join(skills, "pptx-author", "SKILL.md"), "---\nname: pptx-author\n---\n\nbody\n")
+  const proc = Bun.spawnSync(["bun", "run", HOOK], {
+    stdin: new Blob([
+      JSON.stringify({ hook_event_name: "UserPromptSubmit", session_id: "sess-nokey", prompt: "hi", agent_type: "reviewer" }),
+    ]),
+    env: hookEnv({
+      OPENROUTER_API_KEY: "",
+      SYSTEM_ONE_STATE_DIR: stateDir,
+      SYSTEM_ONE_SKILL_DIRS: skills,
+      SYSTEM_ONE_SERVER_URL: "",
+    }),
+    stdout: "pipe",
+  })
+  expect(proc.exitCode).toBe(0)
+  expect(proc.stdout.toString().trim()).toBe("")
+  const lines = readFileSync(join(stateDir, "decisions.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line))
+  expect(lines.filter((line) => line.kind === "usage")).toHaveLength(1)
+  const usage = lines.find((line) => line.kind === "usage")!
+  expect(usage).toMatchObject({ sessionID: "sess-nokey", messageID: "sess-nokey-1", agent: "reviewer" })
+  expect(usage.promptChars).toBe(2)
+})
+
+test("the marketplace manifest resolves the plugin from this local path", async () => {
+  const root = import.meta.dir
+  const manifestPath = join(root, "marketplace", ".claude-plugin", "marketplace.json")
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+    name: string
+    plugins: Array<{ name: string; source: string; description: string; version: string }>
+  }
+  const plugin = JSON.parse(readFileSync(join(root, ".claude-plugin", "plugin.json"), "utf8")) as { name: string; version: string }
+  const entry = manifest.plugins[0]!
+  expect(entry.name).toBe(plugin.name)
+  expect(entry.version).toBe(plugin.version)
+  expect(entry.source).not.toContain("..")
+  expect(entry.description.length).toBeGreaterThan(0)
+
+  const proc = Bun.spawnSync(["claude", "plugin", "validate", root], { stdout: "pipe", stderr: "pipe" })
+  expect(`${proc.stdout.toString()}${proc.stderr.toString()}`).toContain("Validation passed")
+  expect(proc.exitCode).toBe(0)
+
+  const marketplace = Bun.spawnSync(["claude", "plugin", "validate", join(root, "marketplace")], {
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  expect(`${marketplace.stdout.toString()}${marketplace.stderr.toString()}`).toContain("Validation passed")
+})

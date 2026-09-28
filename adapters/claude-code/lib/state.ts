@@ -5,6 +5,7 @@ export interface SessionState {
   decision?: "skill" | "none"
   at: number
   calls: number
+  messages?: number
 }
 
 const TTL_MS = 2 * 60 * 60 * 1000

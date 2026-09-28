@@ -1,4 +1,5 @@
 node_modules/
 .superpowers/
+.omo/
 docs/superpowers/
 __pycache__/

@@ -14,6 +14,9 @@ the OpenCode adapter does for tool routing.
 
 ## Install
 
+Requires `bun` on PATH: the hooks are TypeScript files and Claude Code runs them with
+`bun run`.
+
 Per invocation, nothing is written to your Claude Code configuration:
 
 ```bash

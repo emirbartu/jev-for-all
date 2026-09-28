@@ -1,10 +1,11 @@
 # AGENTS.md — jev-for-all
 
 Jev for every agentic development workflow: this repo is the home for using **Jev**,
-TypeSafe's System One decision model, wherever an agent codes — OpenCode today, Claude Code
-and Hermes adapters planned — so every harness gets the same decisions from one shared
-contract. Shipped today: an OpenCode V2 plugin that routes skill and tool choices through Jev
-so the coding agent spends its context building instead of deliberating. Plugin id: `system-one`.
+TypeSafe's System One decision model, wherever an agent codes — OpenCode, Claude Code, Hermes
+and pi today — so every harness gets the same decisions from one shared contract. Shipped
+today: an OpenCode V2 plugin that routes skill and tool choices through Jev, skill-selection
+adapters for Claude Code, Hermes and pi, and a `browser_task` server for any MCP client.
+Plugin id: `system-one`.
 
 ## What Jev is (read this before touching decision logic)
 
@@ -67,7 +68,7 @@ deliberately not an option today.
 
 | Command | Notes |
 | --- | --- |
-| `bun test` | Core tests live in `src/decisions.test.ts`; the Claude Code adapter adds `adapters/claude-code/system-one.test.ts` (66 total). Hermes: `python3 -m unittest discover -s adapters/hermes/tests`. |
+| `bun test` | Every TypeScript suite: core (`src/decisions.test.ts`), Claude Code, pi-senpi, installer. Hermes: `python3 -m unittest discover -s adapters/hermes/tests`; browser-mcp: `python3 -m unittest discover -s adapters/browser-mcp/tests`. |
 | `bun run typecheck` | `tsc --noEmit`, strict. There is no build step; OpenCode runs `index.ts` with Bun. |
 | `OPENROUTER_API_KEY=... bun scripts/jev-probe.ts decisions` | Live Jev smoke test (noul + choice). |
 | `OPENROUTER_API_KEY=... bun scripts/jev-probe.ts catalog tools.json [task]` | Live tool-routing probe against a tool catalog. |
@@ -95,7 +96,7 @@ push `main`. npm package `jev-for-all`; npm user `emirb42`.
 | `src/browser.ts` + `src/jev-runner.py` | The `browser_task` tool: builds the `uv run` command, parses one `JEV_RESULT` JSON line, fails open. The Python side runs one Jev Ultrafast goal and prints that line; it never raises. |
 | `spec/decisions.json` + `src/policy.ts` | The shared decision contract and its typed loader; adapters read synced copies under their `assets/`. |
 | `fixtures/conformance.jsonl` + `scripts/conformance.ts` | The shared 9-case corpus and the TS conformance runner; the Python port runs the same fixtures. |
-| `adapters/` | Claude Code and Hermes skill-selection adapters, each with its own tests, assets, and README. |
+| `adapters/` | Claude Code, pi-senpi and Hermes adapters plus the browser-mcp server, each with its own tests, assets, and README. |
 | `src/decisions.test.ts` | Every test, with `mockJevServer` (Bun.serve on port 0) asserting the exact request path/body. |
 | `scripts/` | Live probes, headless eval, eval fixtures. |
 | `docs/superpowers/` | Local working docs (specs and plans) — gitignored, not part of the repo. |

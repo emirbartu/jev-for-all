@@ -9,6 +9,8 @@ const assets = [
   { from: join(repo, "fixtures", "conformance.jsonl"), to: join(repo, "adapters", "claude-code", "assets", "conformance.jsonl") },
   { from: join(repo, "spec", "decisions.json"), to: join(repo, "adapters", "hermes", "system_one", "assets", "decisions.json") },
   { from: join(repo, "fixtures", "conformance.jsonl"), to: join(repo, "adapters", "hermes", "system_one", "assets", "conformance.jsonl") },
+  { from: join(repo, "spec", "decisions.json"), to: join(repo, "adapters", "pi-senpi", "assets", "decisions.json") },
+  { from: join(repo, "fixtures", "conformance.jsonl"), to: join(repo, "adapters", "pi-senpi", "assets", "conformance.jsonl") },
 ]
 
 const check = process.argv.includes("--check")

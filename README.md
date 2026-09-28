@@ -9,9 +9,9 @@ just builds.
 ## What this is
 
 Jev is TypeSafe's System One model, reached through OpenRouter's alpha Decisions API. It is not
-an LLM: state in, typed answers out, each with a calibrated confidence. This repo wires it into
-**OpenCode, Claude Code and Hermes** from one shared decision contract, so every harness gets the
-same fast decisions instead of another prompt.
+an LLM: state in, typed answers out, each with a calibrated confidence. This repo wires it
+into **OpenCode, Claude Code, Hermes and pi (senpi)** from one shared decision contract, so
+every harness gets the same fast decisions instead of another prompt.
 
 ## Quick start (OpenCode)
 
@@ -66,6 +66,7 @@ Let your agent install it: point it at
 | --- | --- |
 | Claude Code | [`adapters/claude-code`](adapters/claude-code) |
 | Hermes | [`adapters/hermes`](adapters/hermes) |
+| pi (senpi) | [`adapters/pi-senpi`](adapters/pi-senpi) |
 | Any MCP client (`browser_task` alone) | [`adapters/browser-mcp`](adapters/browser-mcp) |
 
 ## Browser tasks

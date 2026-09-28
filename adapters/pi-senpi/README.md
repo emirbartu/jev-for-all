@@ -107,9 +107,7 @@ JSONL decision log with `"harness":"pi"`, and the exported helpers.
 ## Notes for maintainers
 
 - `assets/decisions.json` and `assets/conformance.jsonl` are synced copies of the
-  canonical contract. This adapter is **not** yet listed in
-  `scripts/sync-adapter-assets.ts`; adding it there is a one-line change that belongs to
-  whoever owns that script, to avoid colliding with parallel work.
+  canonical contract; `scripts/sync-adapter-assets.ts` keeps every adapter's copy in step.
 - pi's assistant message shape differs from OpenCode's, so `piUsageSample` maps pi's
   message onto the shared `UsageSample` that `src/observe.ts` already writes and
   summarizes. The recorder itself is reused unchanged.

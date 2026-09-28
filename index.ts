@@ -2,6 +2,7 @@ import { Plugin } from "@opencode/plugin"
 import { createJev, type Ask } from "./src/jev"
 import { applySkillDecision, defaultSkillRouting, selectSkill, type SkillRoutingConfig } from "./src/skills"
 import { createRecorder, summarize, type UsageSample } from "./src/observe"
+import { policy } from "./src/policy"
 import { browserTool, defaultBrowser, type BrowserConfig } from "./src/browser"
 import { decideVerification, renderVerifyState } from "./src/verify"
 import {
@@ -140,8 +141,8 @@ export function readOptions(raw: Record<string, unknown>): ResolvedOptions {
 }
 
 export function createCache<T>(options: { max?: number; ttlMs?: number; now?: () => number } = {}) {
-  const max = options.max ?? 200
-  const ttlMs = options.ttlMs ?? 600_000
+  const max = options.max ?? policy.cache.max
+  const ttlMs = options.ttlMs ?? policy.cache.ttlMs
   const now = options.now ?? Date.now
   const entries = new Map<string, { value: T; expires: number }>()
 
@@ -165,6 +166,32 @@ export function createCache<T>(options: { max?: number; ttlMs?: number; now?: ()
         if (oldest === undefined) break
         entries.delete(oldest)
       }
+    },
+  }
+}
+
+export function createSpendGuard(
+  options: { cap?: number; warnAt?: number; warn?: (sessionID: string, calls: number, cap: number) => void } = {},
+) {
+  const cap = options.cap ?? policy.spend.maxCallsPerSession
+  const warnAt = options.warnAt ?? policy.spend.warnAt
+  const calls = new Map<string, number>()
+  const warned = new Set<string>()
+
+  return {
+    cap,
+    calls: (sessionID: string): number => calls.get(sessionID) ?? 0,
+    /** Counts one Jev call for the session; false means the contract cap is spent and the call must not go out. */
+    take(sessionID: string): boolean {
+      const used = calls.get(sessionID) ?? 0
+      if (used >= cap) return false
+      const next = used + 1
+      calls.set(sessionID, next)
+      if (next >= Math.floor(cap * warnAt) && !warned.has(sessionID)) {
+        warned.add(sessionID)
+        options.warn?.(sessionID, next, cap)
+      }
+      return true
     },
   }
 }
@@ -197,9 +224,6 @@ export default Plugin.define({
       // browser_task spawns its own process and reads its own credentials, so it survives a missing key.
       if (!options.observe.enabled && !options.browser.enabled) return
     }
-    const ask = apiKey
-      ? createJev({ apiKey, model: options.model, timeoutMs: options.timeoutMs, serverURL: options.serverURL })
-      : undefined
     const skillCache = createCache<{ id: string } | null>()
     const toolCache = createCache<ToolDecision | null>()
     const verifyCache = createCache<{ hint: string } | null>()
@@ -207,19 +231,59 @@ export default Plugin.define({
       if (options.debug) console.log("[system-one]", ...args)
     }
     const warnOnce = createWarnOnce()
-    const askFor = (sessionID: string): Ask => async (input) => {
-      if (!ask) throw new Error("system-one: no API key configured")
-      try {
-        return await ask(input)
-      } catch (error) {
-        warnOnce(sessionID, "jev request failed", error)
-        throw error
-      }
-    }
-    const agentEnabled = (agent: string) => !options.agents || options.agents.includes(agent)
-
     const recorder = createRecorder({ file: options.observe.file, maxSessions: options.observe.retain })
     const observeAbort = new AbortController()
+    const spend = createSpendGuard({
+      warn: (sessionID, calls, cap) => warnOnce(sessionID, `jev spend warning: call ${calls} of ${cap} this session`),
+    })
+    let jevRecords = 0
+    const recordJev = (sessionID: string, meta: { model?: string; inputTokens?: number; outputTokens?: number }) => {
+      if (!options.observe.enabled) return
+      jevRecords += 1
+      recorder.flush([
+        {
+          sessionID,
+          messageID: `jev:${jevRecords}`,
+          agent: "jev",
+          model: meta.model ?? options.model,
+          input: meta.inputTokens ?? 0,
+          output: meta.outputTokens ?? 0,
+          reasoning: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          time: Date.now(),
+        },
+      ])
+    }
+    // One transport per session, so onMeta knows which session the tokens belong to. The cache bounds it.
+    const transports = createCache<Ask>()
+    const askFor = (sessionID: string): Ask => {
+      const cached = transports.get(sessionID)
+      if (cached) return cached
+      if (!apiKey) return () => Promise.reject(new Error("system-one: no API key configured"))
+      const ask = createJev({
+        apiKey,
+        model: options.model,
+        timeoutMs: options.timeoutMs,
+        serverURL: options.serverURL,
+        onMeta: (meta) => recordJev(sessionID, meta),
+      })
+      const guarded: Ask = async (input) => {
+        if (!spend.take(sessionID)) {
+          log("jev call skipped: spend cap reached", sessionID)
+          return {}
+        }
+        try {
+          return await ask(input)
+        } catch (error) {
+          warnOnce(sessionID, "jev request failed", error)
+          throw error
+        }
+      }
+      transports.set(sessionID, guarded)
+      return guarded
+    }
+    const agentEnabled = (agent: string) => !options.agents || options.agents.includes(agent)
 
     if (options.observe.enabled) {
       void (async () => {
@@ -257,7 +321,7 @@ export default Plugin.define({
     const registrations = [
       await ctx.session.hook("prompt", async (event) => {
         if (!options.skills.enabled) return
-        if (!ask) return
+        if (!apiKey) return
         try {
           const skills = (await ctx.skill.list()).data
           const key = `skills:${event.sessionID}:${hashKey(event.prompt.text + "|" + skills.map((skill) => skill.id).join(","))}`
@@ -278,7 +342,7 @@ export default Plugin.define({
       }),
       await ctx.session.hook("context", async (event) => {
         if (!options.tools.enabled || !agentEnabled(event.agent)) return
-        if (!ask) return
+        if (!apiKey) return
         try {
           const state = renderState({ agent: event.agent, messages: event.messages, budget: options.tools.stateBudget })
           const catalog = Object.fromEntries(
@@ -298,7 +362,7 @@ export default Plugin.define({
       }),
       await ctx.session.hook("context", async (event) => {
         if (!options.control.verify || !agentEnabled(event.agent)) return
-        if (!ask) return
+        if (!apiKey) return
         try {
           const state = renderVerifyState(event.messages as never)
           const key = `verify:${event.sessionID}:${hashKey(state)}`

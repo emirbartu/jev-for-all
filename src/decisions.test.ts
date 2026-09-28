@@ -1162,6 +1162,165 @@ test("readOptions parses control options", () => {
   expect(readOptions({ control: { verify: true } }).control).toEqual({ verify: true })
 })
 
+import { createSpendGuard } from "../index"
+
+const deckSkill = { id: "pptx-author", name: "pptx-author", description: "Author decks", content: "Use python-pptx" }
+const deckAnswers = {
+  answers: {
+    which: { type: "choice", choice: "pptx-author", probabilities: { "pptx-author": 0.9 }, confidence: 0.9 },
+    "gate::acts": { type: "noul", noul: 0.9 },
+    "gate::procedure": { type: "noul", noul: 0.8 },
+    "gate::prose": { type: "noul", noul: 0.2 },
+    "gate::advisory": { type: "noul", noul: 0.5 },
+    "rank::fits": { type: "noul", noul: 0.9 },
+  },
+  model: "jev-1.13.0",
+  usage: { input_tokens: 123, output_tokens: 7 },
+}
+
+test("the cache takes its bounds from the contract", () => {
+  const saved = policy.cache
+  policy.cache = { max: 2, ttlMs: 100 }
+  try {
+    let now = 0
+    const cache = createCache<number>({ now: () => now })
+    cache.set("a", 1)
+    cache.set("b", 2)
+    cache.set("c", 3)
+    expect(cache.get("a")).toBeUndefined()
+    expect(cache.get("c")).toBe(3)
+    now = 101
+    expect(cache.get("b")).toBeUndefined()
+  } finally {
+    policy.cache = saved
+  }
+})
+
+test("the spend guard warns once at the contract fraction and stops at the cap", () => {
+  const warnings: Array<[string, number, number]> = []
+  const spend = createSpendGuard({
+    cap: 4,
+    warnAt: 0.5,
+    warn: (sessionID, calls, cap) => warnings.push([sessionID, calls, cap]),
+  })
+  expect(spend.cap).toBe(4)
+  expect([1, 2, 3, 4].map(() => spend.take("ses_1"))).toEqual([true, true, true, true])
+  expect(spend.take("ses_1")).toBe(false)
+  expect(spend.calls("ses_1")).toBe(4)
+  expect(warnings).toEqual([["ses_1", 2, 4]])
+  expect(spend.take("ses_2")).toBe(true)
+  expect(spend.calls("ses_2")).toBe(1)
+})
+
+test("the spend guard reads the cap and warn fraction from the contract", () => {
+  const saved = policy.spend
+  policy.spend = { maxCallsPerSession: 2, warnAt: 0.5 }
+  try {
+    const warnings: number[] = []
+    const spend = createSpendGuard({ warn: (_sessionID, calls) => warnings.push(calls) })
+    expect(spend.take("ses_1")).toBe(true)
+    expect(spend.take("ses_1")).toBe(true)
+    expect(spend.take("ses_1")).toBe(false)
+    expect(warnings).toEqual([1])
+  } finally {
+    policy.spend = saved
+  }
+})
+
+test("the prompt hook stops calling Jev once the session spend cap is spent", async () => {
+  const saved = policy.spend
+  policy.spend = { maxCallsPerSession: 2, warnAt: 0.5 }
+  const mock = mockJevServer(() => ({ body: deckAnswers }))
+  const originalWarn = console.warn
+  const warnings: string[] = []
+  console.warn = (...args: unknown[]) => {
+    warnings.push(args.map((arg) => String(arg)).join(" "))
+  }
+  try {
+    let promptHook: ((event: unknown) => Promise<void> | void) | undefined
+    const plugin = (await import("../index")).default
+    const cleanup = await plugin.setup({
+      options: { apiKey: "test", serverURL: mock.serverURL },
+      skill: { list: async () => ({ data: [deckSkill] }) },
+      session: {
+        hook: (name: string, callback: (event: unknown) => Promise<void> | void) => {
+          if (name === "prompt") promptHook = callback
+          return Promise.resolve({ dispose: async () => {} })
+        },
+      },
+    } as never)
+
+    const first: { text: string; skills?: Array<{ id: string }> } = { text: "build me a deck" }
+    await promptHook!({ sessionID: "s1", prompt: first })
+    expect(first.skills).toEqual([{ id: "pptx-author" }])
+
+    const second: { text: string; skills?: Array<{ id: string }> } = { text: "author a deck" }
+    await promptHook!({ sessionID: "s1", prompt: second })
+    expect(second.skills).toEqual([{ id: "pptx-author" }])
+
+    const capped: { text: string; skills?: Array<{ id: string }> } = { text: "another deck" }
+    await promptHook!({ sessionID: "s1", prompt: capped })
+    expect(capped.skills).toBeUndefined()
+    expect(mock.requests.length).toBe(2)
+    expect(warnings).toEqual(["[system-one] jev spend warning: call 1 of 2 this session"])
+    await cleanup?.()
+  } finally {
+    console.warn = originalWarn
+    policy.spend = saved
+    mock.server.stop(true)
+  }
+})
+
+test("the plugin records Jev token spend in the usage JSONL", async () => {
+  const file = `/tmp/opencode-jev-usage-${Date.now()}-${Math.random().toString(36).slice(2)}.jsonl`
+  const mock = mockJevServer(() => ({ body: deckAnswers }))
+  try {
+    let promptHook: ((event: unknown) => Promise<void> | void) | undefined
+    const plugin = (await import("../index")).default
+    const cleanup = await plugin.setup({
+      options: { apiKey: "test", serverURL: mock.serverURL, observe: { enabled: true, file } },
+      skill: { list: async () => ({ data: [deckSkill] }) },
+      event: { subscribe: async function* () {} },
+      session: {
+        hook: (name: string, callback: (event: unknown) => Promise<void> | void) => {
+          if (name === "prompt") promptHook = callback
+          return Promise.resolve({ dispose: async () => {} })
+        },
+      },
+    } as never)
+
+    const prompt: { text: string; skills?: Array<{ id: string }> } = { text: "build me a deck" }
+    await promptHook!({ sessionID: "s1", prompt })
+    expect(prompt.skills).toEqual([{ id: "pptx-author" }])
+    await cleanup?.()
+
+    const lines = readFileSync(file, "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line))
+    expect(lines.length).toBe(1)
+    expect(lines[0]).toEqual({
+      kind: "usage",
+      sessionID: "s1",
+      messageID: "jev:1",
+      agent: "jev",
+      model: "jev-1.13.0",
+      input: 123,
+      output: 7,
+      reasoning: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      time: lines[0].time,
+    })
+    expect(typeof lines[0].time).toBe("number")
+    expect(lines[0].cost).toBeUndefined()
+    expect(parseSamples(readFileSync(file, "utf8")).length).toBe(1)
+  } finally {
+    mock.server.stop(true)
+    rmSync(file, { force: true })
+  }
+})
+
 test("the verification hook appends the hint only for an unverified claim", async () => {
   const mock = mockJevServer(() => ({
     body: {

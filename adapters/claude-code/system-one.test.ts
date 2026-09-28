@@ -53,6 +53,59 @@ test("scanSkillDirs parses frontmatter and skips non-skill dirs", () => {
   expect(broken?.content).toBe("no frontmatter here")
 })
 
+test("scanSkillDirs finds nested <category>/<skill> skills and skips hidden entries", () => {
+  const dir = skillDir({
+    "top-skill": "---\nname: Top\ndescription: Top skill\n---\n\nTop body\n",
+    "category/nested-skill": "---\nname: Nested\ndescription: Nested skill\n---\n\nNested body\n",
+  })
+  mkdirSync(join(dir, "docs"), { recursive: true })
+  writeFileSync(join(dir, "docs", "notes.md"), "no skill here\n")
+  mkdirSync(join(dir, ".hidden"), { recursive: true })
+  writeFileSync(join(dir, ".hidden", "SKILL.md"), "---\nname: Hidden\n---\n\nHidden body\n")
+  mkdirSync(join(dir, "category", ".hidden-skill"), { recursive: true })
+  writeFileSync(join(dir, "category", ".hidden-skill", "SKILL.md"), "---\nname: Hidden nested\n---\n\nHidden body\n")
+  const skills = scanSkillDirs([dir])
+  expect(skills.map((skill) => skill.id)).toEqual(["top-skill", "nested-skill"])
+  const nested = skills.find((skill) => skill.id === "nested-skill")
+  expect(nested?.name).toBe("Nested")
+  expect(nested?.description).toBe("Nested skill")
+  expect(nested?.content.trim()).toBe("Nested body")
+  expect(nested?.path.endsWith(join("category", "nested-skill", "SKILL.md"))).toBe(true)
+})
+
+test("scanSkillDirs keeps the first skill when a leaf id repeats at both levels", () => {
+  const dir = skillDir({
+    same: "---\nname: Top\ndescription: Top level\n---\n\nTop body\n",
+    "aaa/same": "---\nname: Nested\ndescription: Nested\n---\n\nNested body\n",
+  })
+  const skills = scanSkillDirs([dir])
+  expect(skills.map((skill) => skill.id)).toEqual(["same"])
+  expect(skills[0]?.name).toBe("Top")
+  expect(skills[0]?.path.endsWith(join("same", "SKILL.md"))).toBe(true)
+})
+
+test("scanSkillDirs unfolds folded and literal description frontmatter", () => {
+  const dir = skillDir({
+    ponytail: "---\nname: ponytail\ndescription: >\n  Forces the laziest solution,\n  simplest and most minimal.\n---\n\nbody\n",
+    literal: "---\nname: x\ndescription: |\n  line one\n  line two\n---\nbody",
+  })
+  const skills = scanSkillDirs([dir])
+  expect(skills.find((skill) => skill.id === "ponytail")?.description).toBe(
+    "Forces the laziest solution, simplest and most minimal.",
+  )
+  expect(skills.find((skill) => skill.id === "literal")?.description).toBe("line one\nline two")
+})
+
+test("scanSkillDirs parses CRLF frontmatter like the reference", () => {
+  const dir = skillDir({
+    crlf: "---\r\nname: c\r\ndescription: crlf desc\r\n---\r\n\r\nbody\r\n",
+  })
+  const skills = scanSkillDirs([dir])
+  expect(skills[0]?.name).toBe("c")
+  expect(skills[0]?.description).toBe("crlf desc")
+  expect(skills[0]?.content).toBe("body\r\n")
+})
+
 test("defaultSkillDirs includes the user and project skills directories", () => {
   const dirs = defaultSkillDirs("/work/project")
   expect(dirs).toEqual([join(process.env.HOME ?? "", ".claude", "skills"), "/work/project/.claude/skills"])

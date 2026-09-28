@@ -1,6 +1,7 @@
 """Hermes plugin: Jev-routed skill selection via pre_llm_call context injection."""
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import time
@@ -32,7 +33,7 @@ def _session_budget(ctx, *, session_id: str, hook: str, log_path: Path) -> int |
     calls = 0
     try:
         for line in log_path.read_text().splitlines():
-            if f'"sessionID": "{session_id}"' in line:
+            if '"kind": "decision"' in line and f'"sessionID": "{session_id}"' in line:
                 calls += 1
     except OSError:
         calls = 0
@@ -50,15 +51,40 @@ def _session_budget(ctx, *, session_id: str, hook: str, log_path: Path) -> int |
     return calls
 
 
-def _handle_turn(ctx, *, session_id: str, user_message: str, **kwargs) -> dict | None:
+def _observe_enabled(ctx) -> bool:
+    """Usage observation is opt-in: the setting decides, the contract owns the default."""
+    enabled = _setting(ctx, "observe")
+    if enabled is None:
+        enabled = decision.POLICY.get("observe", {}).get("enabled", False)
+    return bool(enabled)
+
+
+def _message_id(user_message: str) -> str:
+    """Fallback id when the host sends no turn_id, so every usage row has a messageID."""
+    return "msg-" + hashlib.sha1((user_message or "").encode("utf-8", "replace")).hexdigest()[:12]
+
+
+def _handle_turn(ctx, *, session_id: str, user_message: str, model: str = "", platform: str = "", **kwargs) -> dict | None:
     try:
-        model = _setting(ctx, "model") or "~typesafe/jev-latest"
+        log_path = _plugin_data_dir() / "decisions.jsonl"
+        if _observe_enabled(ctx):
+            decision.log_usage(
+                log_path,
+                decision.usage_from_message(
+                    session_id=session_id,
+                    message_id=kwargs.get("turn_id") or _message_id(user_message),
+                    agent=platform,
+                    model=model,
+                    time_s=time.time(),
+                ),
+            )
+
+        jev_model = _setting(ctx, "model") or "~typesafe/jev-latest"
         timeout_ms = _setting(ctx, "timeout_ms") or 2000
         skill_dirs = _setting(ctx, "skill_dirs") or DEFAULT_SKILL_DIRS
         if isinstance(skill_dirs, str):
             skill_dirs = [skill_dirs]
 
-        log_path = _plugin_data_dir() / "decisions.jsonl"
         skills = decision.scan_skills(skill_dirs)
         if not skills:
             return None
@@ -79,7 +105,7 @@ def _handle_turn(ctx, *, session_id: str, user_message: str, **kwargs) -> dict |
                 state,
                 questions,
                 api_key=api_key,
-                model=model,
+                model=jev_model,
                 timeout_s=timeout_ms / 1000,
                 on_meta=meta.update,
             )
@@ -175,7 +201,7 @@ def register(ctx):
     ctx.register_hook(
         "pre_llm_call",
         lambda session_id, user_message, conversation_history, is_first_turn, model, platform, **kwargs: _handle_turn(
-            ctx, session_id=session_id, user_message=user_message
+            ctx, session_id=session_id, user_message=user_message, model=model, platform=platform, **kwargs
         ),
     )
     ctx.register_hook(

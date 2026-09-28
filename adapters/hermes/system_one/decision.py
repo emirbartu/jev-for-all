@@ -6,6 +6,7 @@ conformance fixtures are the parity check.
 from __future__ import annotations
 
 import json
+import math
 import re
 import urllib.request
 from pathlib import Path
@@ -341,11 +342,63 @@ def ask_openrouter(
     return answers
 
 
-def log_decision(path: str | Path, record: dict) -> None:
+def _append_line(path: str | Path, record: dict) -> None:
+    """Append one JSONL line to the shared log; a broken log never reaches the caller."""
     try:
         target = Path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
         with target.open("a") as handle:
-            handle.write(json.dumps({"kind": "decision", **record}) + "\n")
+            handle.write(json.dumps(record) + "\n")
     except OSError:
         pass
+
+
+def log_decision(path: str | Path, record: dict) -> None:
+    _append_line(path, {"kind": "decision", **record})
+
+
+def _finite(value: Any) -> float:
+    """Mirror of ``finite()`` in src/observe.ts: anything that is not a finite number is zero."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return 0
+    return value if math.isfinite(value) else 0
+
+
+def usage_from_message(
+    *,
+    session_id: str,
+    message_id: str,
+    agent: str = "",
+    model: str = "",
+    time_s: Any = 0,
+    input_tokens: Any = None,
+    output_tokens: Any = None,
+    reasoning_tokens: Any = None,
+    cache_read_tokens: Any = None,
+    cache_write_tokens: Any = None,
+) -> dict:
+    """One usage sample for one user message, shaped like ``UsageSample`` in src/observe.ts.
+
+    ``pre_llm_call`` carries no token counts (Hermes reports per-call usage on
+    ``post_api_request``, which this plugin does not register), so the buckets arrive
+    as ``None`` and ``_finite`` zeroes them; the row still lands, so a Hermes session
+    is visible to the cross-harness report.
+    """
+    return {
+        "harness": "hermes",
+        "sessionID": session_id,
+        "messageID": message_id,
+        "agent": agent or "?",
+        "model": model or "?",
+        "input": _finite(input_tokens),
+        "output": _finite(output_tokens),
+        "reasoning": _finite(reasoning_tokens),
+        "cacheRead": _finite(cache_read_tokens),
+        "cacheWrite": _finite(cache_write_tokens),
+        "time": _finite(time_s),
+    }
+
+
+def log_usage(path: str | Path, record: dict) -> None:
+    """Append one ``kind: "usage"`` line next to the decision lines; never raises."""
+    _append_line(path, {"kind": "usage", **record})

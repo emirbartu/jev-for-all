@@ -68,6 +68,7 @@ Capabilities → Plugins form (driven by `plugin.yaml`'s `config_schema`):
 | `max_calls_per_session` | `500` (contract) | Stop calling Jev past this many calls in one session. |
 | `timeout_ms` | `2000` | Per-request timeout in milliseconds. |
 | `verify` | `false` | `pre_verify`: nudge once per turn when a completion claim lacks a passing check. |
+| `observe` | `false` | Append one `usage` line per user message to the decision log. Makes no Jev call. |
 | `skill_dirs` | `[]` → `$HERMES_HOME/skills` | Skill directories to scan. |
 
 ## Decision log
@@ -78,6 +79,22 @@ checkout `adapters/hermes/system_one/decisions.jsonl`, installed
 `none` / `no-change`), the resolved model id, token usage, latency, and the per-session call
 count; cap and warn events are logged the same way. `pre_verify` records carry
 `"hook": "pre_verify"` and `chosen` `nudge` or `hold`.
+
+## Usage observation (`observe`, off by default)
+
+With `observe` on, every user message appends one `usage` line to the same `decisions.jsonl`,
+in the shape the OpenCode recorder writes (`src/observe.ts`), plus the `harness` field:
+
+```json
+{"kind": "usage", "harness": "hermes", "sessionID": "...", "messageID": "<turn_id>", "agent": "cli", "model": "claude-sonnet-4-6", "input": 0, "output": 0, "reasoning": 0, "cacheRead": 0, "cacheWrite": 0, "time": ...}
+```
+
+`messageID` is the host's `turn_id` (a digest of the user message when the host sends none), and
+the line lands whatever else the turn does — no roster, no API key, or no Jev call still records
+the row. The token buckets are zero: `pre_llm_call` carries no counts, because Hermes reports real
+per-call usage on `post_api_request`, which this plugin does not register. The row makes a Hermes
+session visible to `scripts/decision-report.ts`; it does not yet price it. Nothing leaves the
+machine, and the recorder never raises: a failed append is swallowed like every other log write.
 
 ## Data egress
 

@@ -91,7 +91,7 @@ The useful options (defaults shown):
 
 - `apiKey` — OpenRouter key, or set `OPENROUTER_API_KEY`
 - `model` — `~typesafe/jev-latest`
-- `timeoutMs` — `1000`, the per-request timeout
+- `timeoutMs` — `2500`, the per-request timeout
 - `skills.enabled` / `skills.gateThreshold` — `true` / `0.3`, skill routing
 - `tools.enabled` / `tools.maxTools` — `true` / `12`, tool-subset routing
 - `observe.enabled` / `observe.file` — `false` / —, per-message usage JSONL
@@ -108,7 +108,7 @@ The useful options (defaults shown):
       "options": {
         "apiKey": "sk-or-...",        // or set OPENROUTER_API_KEY
         "model": "~typesafe/jev-latest",
-        "timeoutMs": 1000,
+        "timeoutMs": 2500,
         "debug": false,
         "agents": ["build"],
         "serverURL": "https://openrouter.ai",

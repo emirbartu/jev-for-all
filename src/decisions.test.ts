@@ -307,7 +307,7 @@ test("hashKey is stable and distinct", () => {
 test("readOptions applies defaults and accepts overrides", () => {
   const defaults = readOptions({})
   expect(defaults.model).toBe("~typesafe/jev-latest")
-  expect(defaults.timeoutMs).toBe(1000)
+  expect(defaults.timeoutMs).toBe(2500)
   expect(defaults.tools.alwaysVisible).toContain("read")
   expect(defaults.skills.rerank).toBe("auto")
 
@@ -391,7 +391,7 @@ test("readOptions warns on invalid values and falls back", () => {
   }
   try {
     const options = readOptions({ timeoutMs: "fast" })
-    expect(options.timeoutMs).toBe(1000)
+    expect(options.timeoutMs).toBe(2500)
     expect(calls.some((args) => String(args[0]).includes("timeoutMs"))).toBe(true)
   } finally {
     console.warn = original
@@ -434,6 +434,55 @@ test("prompt hook routes skills end to end", async () => {
     const prompt: { text: string; skills?: Array<{ id: string }> } = { text: "build me a deck" }
     await promptHook!({ sessionID: "s1", prompt })
     expect(prompt.skills).toEqual([{ id: "pptx-author" }])
+  } finally {
+    mock.server.stop(true)
+  }
+})
+
+test("a failed skill decision is not cached as a no-skill answer", async () => {
+  let calls = 0
+  const mock = mockJevServer(() => {
+    calls += 1
+    if (calls === 1) return { status: 500, body: { error: "upstream down" } }
+    return {
+      body: {
+        answers: {
+          which: { type: "choice", choice: "pptx-author", probabilities: { "pptx-author": 0.9 }, confidence: 0.9 },
+          "gate::acts": { type: "noul", noul: 0.9 },
+          "gate::procedure": { type: "noul", noul: 0.8 },
+          "gate::prose": { type: "noul", noul: 0.2 },
+          "gate::advisory": { type: "noul", noul: 0.5 },
+        },
+        model: "~typesafe/jev-latest",
+        usage: { input_tokens: 1, output_tokens: 1 },
+      },
+    }
+  })
+  try {
+    let promptHook: ((event: unknown) => Promise<void> | void) | undefined
+    const plugin = (await import("../index")).default
+    await plugin.setup({
+      options: { apiKey: "test", serverURL: mock.serverURL },
+      skill: {
+        list: async () => ({
+          data: [{ id: "pptx-author", name: "pptx-author", description: "Author decks", content: "Use python-pptx" }],
+        }),
+      },
+      session: {
+        hook: (name: string, callback: (event: unknown) => Promise<void> | void) => {
+          if (name === "prompt") promptHook = callback
+          return Promise.resolve({ dispose: async () => {} })
+        },
+      },
+    } as never)
+
+    const first: { text: string; skills?: Array<{ id: string }> } = { text: "build me a deck" }
+    await promptHook!({ sessionID: "s1", prompt: first })
+    expect(first.skills ?? []).toEqual([])
+
+    const retry: { text: string; skills?: Array<{ id: string }> } = { text: "build me a deck" }
+    await promptHook!({ sessionID: "s1", prompt: retry })
+    expect(retry.skills).toEqual([{ id: "pptx-author" }])
   } finally {
     mock.server.stop(true)
   }

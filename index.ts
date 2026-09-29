@@ -85,7 +85,7 @@ export function readOptions(raw: Record<string, unknown>): ResolvedOptions {
   return {
     apiKey: typeof raw.apiKey === "string" ? raw.apiKey : undefined,
     model: typeof raw.model === "string" ? raw.model : "~typesafe/jev-latest",
-    timeoutMs: number("timeoutMs", raw.timeoutMs, 1000),
+    timeoutMs: number("timeoutMs", raw.timeoutMs, 2500),
     debug: bool("debug", raw.debug, false),
     serverURL: typeof raw.serverURL === "string" ? raw.serverURL : undefined,
     agents: agents.length > 0 ? agents : undefined,
@@ -193,6 +193,22 @@ export function createSpendGuard(
       }
       return true
     },
+  }
+}
+
+/** Wraps an Ask so callers can tell a transport failure from Jev's own "no decision" answer. */
+export function createAskTracker(ask: Ask): { ask: Ask; failed: () => boolean } {
+  let failed = false
+  return {
+    ask: async (input) => {
+      try {
+        return await ask(input)
+      } catch (error) {
+        failed = true
+        throw error
+      }
+    },
+    failed: () => failed,
   }
 }
 
@@ -327,12 +343,16 @@ export default Plugin.define({
           const key = `skills:${event.sessionID}:${hashKey(event.prompt.text + "|" + skills.map((skill) => skill.id).join(","))}`
           let decision = skillCache.get(key)
           if (decision === undefined) {
-            decision = await selectSkill(askFor(event.sessionID), {
+            const tracker = createAskTracker(askFor(event.sessionID))
+            decision = await selectSkill(tracker.ask, {
               request: event.prompt.text,
               skills,
               config: options.skills,
             })
-            skillCache.set(key, decision)
+            // A timed-out or errored call is not a "no skill" answer; caching it would pin the
+            // wrong decision for this prompt for the whole TTL.
+            if (tracker.failed()) log("skill decision not cached: Jev unavailable")
+            else skillCache.set(key, decision)
             log("skill decision", decision)
           }
           applySkillDecision(event.prompt as unknown as { skills?: Array<{ id: string }> }, decision)
@@ -351,8 +371,10 @@ export default Plugin.define({
           const key = `tools:${event.sessionID}:${hashKey(`${event.agent}|${state}|${Object.keys(catalog).join(",")}`)}`
           let decision = toolCache.get(key)
           if (decision === undefined) {
-            decision = await routeTools(askFor(event.sessionID), { state, catalog, config: options.tools })
-            toolCache.set(key, decision)
+            const tracker = createAskTracker(askFor(event.sessionID))
+            decision = await routeTools(tracker.ask, { state, catalog, config: options.tools })
+            if (tracker.failed()) log("tool decision not cached: Jev unavailable")
+            else toolCache.set(key, decision)
             log("tool decision", decision && { start: decision.start, tools: decision.tools, needsTool: decision.needsTool })
           }
           if (decision) applyToolDecision(event.tools, event.system, decision)
@@ -368,8 +390,10 @@ export default Plugin.define({
           const key = `verify:${event.sessionID}:${hashKey(state)}`
           let decision = verifyCache.get(key)
           if (decision === undefined) {
-            decision = await decideVerification(askFor(event.sessionID), { messages: event.messages as never })
-            verifyCache.set(key, decision)
+            const tracker = createAskTracker(askFor(event.sessionID))
+            decision = await decideVerification(tracker.ask, { messages: event.messages as never })
+            if (tracker.failed()) log("verify decision not cached: Jev unavailable")
+            else verifyCache.set(key, decision)
             log("verify decision", decision ? "hint" : "skip")
           }
           if (decision) event.system.push({ type: "text", text: decision.hint })

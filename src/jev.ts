@@ -53,12 +53,12 @@ export function createJev(options: JevOptions): Ask {
     } catch (error) {
       const status = (error as { statusCode?: number }).statusCode
       throw new JevError(
-        `system-one request failed: ${error instanceof Error ? error.message : String(error)}`,
+        `jev-for-all request failed: ${error instanceof Error ? error.message : String(error)}`,
         typeof status === "number" ? status : undefined,
       )
     }
     const answers = response?.answers
-    if (!answers || typeof answers !== "object") throw new JevError("system-one response missing answers")
+    if (!answers || typeof answers !== "object") throw new JevError("jev-for-all response missing answers")
     const resolved = (response as { model?: unknown }).model
     const usage = (response as { usage?: { inputTokens?: unknown; outputTokens?: unknown } }).usage
     options.onMeta?.({

@@ -1,6 +1,6 @@
 """Run one Jev Ultrafast goal and print a single JSON result line.
 
-Spawned by the system-one plugin's `browser_task` tool as
+Spawned by the jev-for-all plugin's `browser_task` tool as
 
     uv run --directory <jev checkout> --env-file <checkout>/.env --quiet python jev-runner.py
 

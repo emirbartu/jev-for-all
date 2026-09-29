@@ -257,7 +257,7 @@ export default function jevForPi(pi: PiExtensionAPI): void {
     sessionID = ctx.sessionManager?.getSessionId?.() ?? "pi"
     options = readPiOptions(readPiSettings(agentDir))
     if (options.sessionID) sessionID = options.sessionID
-    warnOnce = createWarnOnce()
+    warnOnce = createWarnOnce("[system-one]")
     const apiKey = options.apiKey ?? ENV.OPENROUTER_API_KEY
     const routing = options.skills.enabled || options.tools.enabled
     if (apiKey) {

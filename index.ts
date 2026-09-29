@@ -46,7 +46,7 @@ export function readOptions(raw: Record<string, unknown>): ResolvedOptions {
   const tools = (raw.tools ?? {}) as Record<string, unknown>
   const skills = (raw.skills ?? {}) as Record<string, unknown>
   const warn = (key: string, fallback: unknown) =>
-    console.warn(`[system-one] invalid option ${key}; using ${fallback}`)
+    console.warn(`[jev-for-all] invalid option ${key}; using ${fallback}`)
   const number = (key: string, value: unknown, fallback: number) => {
     if (value === undefined) return fallback
     if (typeof value === "number" && Number.isFinite(value)) return value
@@ -220,23 +220,23 @@ export function hashKey(text: string): string {
   return (hash >>> 0).toString(36)
 }
 
-export function createWarnOnce() {
+export function createWarnOnce(prefix = "[jev-for-all]") {
   const warned = new Set<string>()
   return (sessionID: string, ...args: unknown[]) => {
     if (warned.has(sessionID)) return
     warned.add(sessionID)
-    console.warn("[system-one]", ...args)
+    console.warn(prefix, ...args)
   }
 }
 
 export default Plugin.define({
-  id: "system-one",
+  id: "jev-for-all",
   async setup(ctx) {
     const options = readOptions((ctx.options ?? {}) as Record<string, unknown>)
     const apiKey = options.apiKey ?? process.env.OPENROUTER_API_KEY
     const routing = options.skills.enabled || options.tools.enabled
     if (!apiKey) {
-      if (routing) console.warn("[system-one] routing disabled: set options.apiKey or OPENROUTER_API_KEY")
+      if (routing) console.warn("[jev-for-all] routing disabled: set options.apiKey or OPENROUTER_API_KEY")
       // browser_task spawns its own process and reads its own credentials, so it survives a missing key.
       if (!options.observe.enabled && !options.browser.enabled) return
     }
@@ -244,7 +244,7 @@ export default Plugin.define({
     const toolCache = createCache<ToolDecision | null>()
     const verifyCache = createCache<{ hint: string } | null>()
     const log = (...args: unknown[]) => {
-      if (options.debug) console.log("[system-one]", ...args)
+      if (options.debug) console.log("[jev-for-all]", ...args)
     }
     const warnOnce = createWarnOnce()
     const recorder = createRecorder({ file: options.observe.file, maxSessions: options.observe.retain })
@@ -276,7 +276,7 @@ export default Plugin.define({
     const askFor = (sessionID: string): Ask => {
       const cached = transports.get(sessionID)
       if (cached) return cached
-      if (!apiKey) return () => Promise.reject(new Error("system-one: no API key configured"))
+      if (!apiKey) return () => Promise.reject(new Error("jev-for-all: no API key configured"))
       const ask = createJev({
         apiKey,
         model: options.model,

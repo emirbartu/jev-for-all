@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "Local marketplace for the Jev-routed Claude Code adapter in this repo.",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "plugins": [
     {
       "name": "system-one",
       "source": "./system-one",
       "description": "Jev-routed skill selection: at most one skill is injected per prompt, the Skill tool is denied when no skill applies, usage is recorded per user message, and an optional Stop-hook verification gate refuses unsupported completion claims.",
-      "version": "0.1.0"
+      "version": "0.2.0"
     }
   ]
 }

@@ -1311,7 +1311,7 @@ test("the prompt hook stops calling Jev once the session spend cap is spent", as
     await promptHook!({ sessionID: "s1", prompt: capped })
     expect(capped.skills).toBeUndefined()
     expect(mock.requests.length).toBe(2)
-    expect(warnings).toEqual(["[system-one] jev spend warning: call 1 of 2 this session"])
+    expect(warnings).toEqual(["[jev-for-all] jev spend warning: call 1 of 2 this session"])
     await cleanup?.()
   } finally {
     console.warn = originalWarn

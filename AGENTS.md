@@ -5,7 +5,7 @@ TypeSafe's System One decision model, wherever an agent codes — OpenCode, Clau
 and pi today — so every harness gets the same decisions from one shared contract. Shipped
 today: an OpenCode V2 plugin that routes skill and tool choices through Jev, skill-selection
 adapters for Claude Code, Hermes and pi, and a `browser_task` server for any MCP client.
-Plugin id: `system-one`.
+Plugin id: `jev-for-all`.
 
 ## What Jev is (read this before touching decision logic)
 

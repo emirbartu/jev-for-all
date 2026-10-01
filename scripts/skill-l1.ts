@@ -1,5 +1,5 @@
 // L1 eval for the shipped skill decision: real requests against the live Jev path.
-// Pure functions are exported for offline tests; only the CLI touches the network.
+// Pure functions are exported for reuse; only the CLI touches the network.
 import { appendFileSync, mkdirSync, readFileSync, readdirSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { createJev } from "../src/jev"

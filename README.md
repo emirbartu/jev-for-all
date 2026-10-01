@@ -1,17 +1,18 @@
 # jev-for-all
 
-**Stop making your coding agent deliberate.** Jev — a decision model that answers in ~500 ms —
-picks the skill to load, the tool subset for the step, and every browser move; the coding agent
-just builds.
+Jev is TypeSafe's System One decision model. It answers a question in roughly 70 to 500 ms with a
+typed answer and a confidence score. This repo connects Jev to coding agents so they can ask it
+which skill to load, which tools a step needs, and how to move in the browser.
 
-**Why we built it this way — and where Jev wins or loses: [When Jev wins](WHERE-JEV-WINS.md).**
+For the reasoning behind the design, including where Jev wins and where it loses, see
+[When Jev wins](WHERE-JEV-WINS.md).
 
 ## What this is
 
-Jev is TypeSafe's System One model, reached through OpenRouter's alpha Decisions API. It is not
-an LLM: state in, typed answers out, each with a calibrated confidence. This repo wires it
-into **OpenCode, Claude Code, Hermes and pi (senpi)** from one shared decision contract, so
-every harness gets the same fast decisions instead of another prompt.
+Jev runs on OpenRouter's alpha Decisions API. It is not an LLM. You pass it state, it returns
+typed answers with a calibrated confidence for each. The repo connects it to OpenCode, Claude
+Code, Hermes and pi (senpi) through one shared decision contract, so every harness gets the same
+answers.
 
 ## Quick start (OpenCode)
 
@@ -19,15 +20,15 @@ every harness gets the same fast decisions instead of another prompt.
 bunx jev-for-all install
 ```
 
-The installer writes the plugin block into your OpenCode config and prompts for your OpenRouter
-key ([create one](https://openrouter.ai/keys)); it is idempotent and leaves everything else in
-the file alone. Restart OpenCode — routing is on for every session.
+The installer writes the plugin block into your OpenCode config and asks for your OpenRouter key
+([create one](https://openrouter.ai/keys)). It is idempotent and leaves the rest of the file
+alone. Restart OpenCode and routing is on for every session.
 
-V2 also has a native manager: `opencode plugin add jev-for-all` writes a plain
-`"plugins": ["jev-for-all"]` entry. It cannot add `options`, so set `OPENROUTER_API_KEY` instead
+V2 also has a native manager. `opencode plugin add jev-for-all` writes a plain
+`"plugins": ["jev-for-all"]` entry; it cannot add `options`, so set `OPENROUTER_API_KEY` instead
 of `apiKey`.
 
-Or edit it yourself:
+Or edit the config yourself:
 
 ```jsonc
 // ~/.config/opencode/opencode.jsonc
@@ -38,27 +39,27 @@ Or edit it yourself:
 }
 ```
 
-A local clone path can be used instead when developing the plugin.
+A local clone path works too when you develop the plugin.
 
 Let your agent install it: point it at
 <https://raw.githubusercontent.com/emirbartu/jev-for-all/main/docs/install.md>.
 
-## Measured results, not promises
+## Results
 
-- **Skill routing** — 64 real requests against a 22-skill roster: **0 wrong picks**, hit rate
-  **85.9%**, a full run costs **~$0.005**.
-- **Decision cost** — **≈ $0.0001 per decision**; a busy session costs pennies.
-- **Browser** — one live `browser_task` run, "open this page and click that article": **2 steps,
-  3 decisions, $0.000199, 3.7 s**, correct final page.
-- **Hermes adapter** — same contract, a 78-skill roster, measured: hit 75%, 0 wrong picks
+- Skill routing: 64 real requests against a 22-skill roster, 0 wrong picks and an 85.9% hit rate.
+  A full run costs about $0.005.
+- Decision cost: about $0.0001 per decision, so a busy session costs pennies.
+- Browser: one live `browser_task` run, "open this page and click that article", took 2 steps and
+  3 decisions, cost $0.000199, and finished in 3.7 s on the correct page.
+- Hermes adapter: the same contract against a 78-skill roster hit 75% with 0 wrong picks
   ([numbers](adapters/hermes/README.md)).
 
 ## What Jev decides
 
-- **Which skill to load** — one from your whole roster, chosen per user message.
-- **Which tool subset this step needs** — a smaller catalog, no tool-choice deliberation.
-- **Every operation inside `browser_task`** — given a goal, Jev picks each click, target and
-  typed value.
+- Which skill to load, one from the whole roster, chosen for each user message.
+- Which tool subset this step needs, so the agent picks from a smaller catalog.
+- Every operation inside `browser_task`: given a goal, Jev picks each click, target and typed
+  value.
 
 ## The other harnesses
 
@@ -71,32 +72,32 @@ Let your agent install it: point it at
 
 ## Browser tasks
 
-`browser_task` runs one natural-language goal in a real browser; Jev picks every move, and only a
+`browser_task` runs one natural-language goal in a real browser. Jev picks every move, and only a
 `TYPE_TEXT` step calls a text model, so a task costs less than a cent. Prerequisites (uv, a
-`jev-ultrafast` checkout, a Chromium-family browser over CDP) and the MCP wiring live in
+`jev-ultrafast` checkout, and a Chromium-family browser over CDP) and the MCP wiring are in
 [`adapters/browser-mcp/README.md`](adapters/browser-mcp/README.md).
 
-## Privacy & fail-open
+## Privacy and fail-open behavior
 
-Every model dispatch sends the conversation tail — including tool-result bodies, up to
-`tools.stateBudget` (6000) characters — plus the tool catalog's names and descriptions to
-OpenRouter's alpha Decisions endpoint. `browser_task` additionally sends the current page's text
-and controls on every step while it runs. Nothing is sent without an API key. Every Jev call
-fails open: a timeout, error, malformed answer or low-confidence decision changes nothing and
-never blocks a model call.
+Every model dispatch sends the conversation tail, including tool-result bodies up to
+`tools.stateBudget` (6000) characters, plus the tool catalog's names and descriptions, to
+OpenRouter's alpha Decisions endpoint. `browser_task` also sends the current page's text and
+controls on every step while it runs. Nothing is sent without an API key. Every Jev call fails
+open: a timeout, error, malformed answer or low-confidence decision changes nothing and never
+blocks a model call.
 
 ## Configuration
 
-The useful options (defaults shown):
+The useful options, with defaults:
 
-- `apiKey` — OpenRouter key, or set `OPENROUTER_API_KEY`
-- `model` — `~typesafe/jev-latest`
-- `timeoutMs` — `2500`, the per-request timeout
-- `skills.enabled` / `skills.gateThreshold` — `true` / `0.3`, skill routing
-- `tools.enabled` / `tools.maxTools` — `true` / `12`, tool-subset routing
-- `observe.enabled` / `observe.file` — `false` / —, per-message usage JSONL
-- `browser.enabled` / `browser.jevDir` — `false` / `~/jev-ultrafast`
-- `control.verify` — `false`, verification-gate hint before a completion claim
+- `apiKey`: OpenRouter key, or set `OPENROUTER_API_KEY`
+- `model`: `~typesafe/jev-latest`
+- `timeoutMs`: `2500`, the per-request timeout
+- `skills.enabled`, `skills.gateThreshold`: `true`, `0.3` for skill routing
+- `tools.enabled`, `tools.maxTools`: `true`, `12` for tool-subset routing
+- `observe.enabled`, `observe.file`: `false`, none, per-message usage JSONL
+- `browser.enabled`, `browser.jevDir`: `false`, `~/jev-ultrafast`
+- `control.verify`: `false`, verification-gate hint before a completion claim
 
 ## Full configuration
 
@@ -132,16 +133,17 @@ The useful options (defaults shown):
 ## Development
 
 ```bash
-bun test && bun run typecheck                            # unit suite
+bun run typecheck                                        # type check
 OPENROUTER_API_KEY=... bun scripts/jev-probe.ts decisions  # live Jev smoke test
 ```
 
 ## Status
 
 Skill and tool routing are shipped and measured. The verification gate is built and measured
-(80.0% hit on 15 cases, clearing its bar) and still ships off (`control.verify`) pending an L2
-run. Next: the routing-quality design pass.
+(80.0% hit on 15 cases, above its bar) and ships off (`control.verify`) pending an L2 run. Next is
+the routing-quality design pass.
 
 ---
 
-Jev is a TypeSafe model; this is an independent integration. This repo is not affiliated with any organizations or teams.
+Jev is a TypeSafe model; this is an independent integration, and the repo is not affiliated with
+any other organization or team.

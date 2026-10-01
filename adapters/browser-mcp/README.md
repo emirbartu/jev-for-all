@@ -1,7 +1,7 @@
 # browser-mcp
 
 One stdio MCP server exposing a single tool, `browser_task`: it runs one natural-language goal
-in a real browser through the Jev Ultrafast loop, with a Jev policy model — not the host agent —
+in a real browser through the Jev Ultrafast loop, with a Jev policy model, not the host agent,
 choosing every click, field value and target. The contract mirrors the OpenCode plugin's
 `src/browser.ts` exactly and reuses `src/jev-runner.py` unchanged, so all three harnesses run the
 same loop.
@@ -34,9 +34,9 @@ The loop's credentials come from the **checkout's** `.env`, never from the MCP h
 
 ## Tool contract
 
-- `goal` (required) — one natural-language goal including how to tell it succeeded.
-- `url` (optional) — start page; defaults to `about:blank`.
-- `max_steps` (optional) — clamped to 1–60; each step is one cheap Jev decision.
+- `goal` (required): one natural-language goal including how to tell it succeeded.
+- `url` (optional): start page; defaults to `about:blank`.
+- `max_steps` (optional): clamped to 1–60; each step is one cheap Jev decision.
 
 The tool returns the run report as text: final URL, title, step trace, decision count, cost, and
 a readable reason on every failure. It never raises into the protocol; failures come back with
@@ -44,7 +44,7 @@ a readable reason on every failure. It never raises into the protocol; failures 
 
 ## Hermes wiring
 
-Add this to `~/.hermes/config.yaml` (this repo never writes your Hermes home — edit it
+Add this to `~/.hermes/config.yaml` (this repo never writes your Hermes home, so edit it
 yourself), then restart Hermes:
 
 ```yaml
@@ -69,11 +69,11 @@ path is the one exercised (`BROWSER_MCP_JEV_DIR=/nonexistent/jev-checkout`):
 initialize -> system-one-browser 2025-11-25
 tools/list -> ['browser_task']
 tools/call ->
-browser_task did not finish — error
+browser_task did not finish (error)
 error: browser_task produced no result (exit 2). error: No such file or directory (os error 2)
 goal: open the fixture page
 final url: (unchanged)
-steps: 0 — 0 Jev decisions, $0.000000, 0 ms
+steps: 0 (0 Jev decisions, $0.000000, 0 ms)
 Not confirmed by the caller: check the page or the outcome before reporting success.
 isError: False
 ```
@@ -88,11 +88,11 @@ browser-harness, so the run failed open with a readable reason and **zero paid c
 (`0 Jev decisions, $0.000000`):
 
 ```text
-browser_task did not finish — error
+browser_task did not finish (error)
 error: RuntimeError: daemon default didn't come up -- check /home/gerius/.config/browser-harness/tmp/bu-default.log
 goal: Open the fixture page and report the text of its main heading.
 final url: file:///home/gerius/jev-ultrafast/jev_ultrafast/static/fixture.html
-steps: 0 — 0 Jev decisions, $0.000000, 9711 ms
+steps: 0 (0 Jev decisions, $0.000000, 9711 ms)
 Not confirmed by the caller: check the page or the outcome before reporting success.
 isError: False
 ```
@@ -100,21 +100,11 @@ isError: False
 Seed a browser per the OpenCode plugin README's prerequisites and rerun the same call to get a
 real trace.
 
-## Tests
-
-```bash
-python3 -m unittest discover -s adapters/browser-mcp/tests -v
-```
-
-Offline and free: pure parity tests against `src/browser.ts`'s behavior, plus stdio handshake and
-tool-call tests that spawn the real server through `uv` with a fake launcher (no browser, no paid
-calls).
-
 ## Data egress
 
 While a task runs, the goal and start URL leave the machine, and for **every step** the loop
 sends the current page's URL, title, visible text, indexed controls and recent actions to the
-policy model. That is the page the browser is on, so anything rendered on that tab — including
-content behind a session you are already signed into — can be sent. No screenshots and no HTML
+policy model. That is the page the browser is on, so anything rendered on that tab, including
+content behind a session you are already signed into, can be sent. No screenshots and no HTML
 are sent, only the extracted text and control list; a step that types a value also sends that
 field's meaning and page context to the text model. The trace and cost figures stay local.

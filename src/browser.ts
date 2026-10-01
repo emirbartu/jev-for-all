@@ -57,7 +57,7 @@ export const browserTaskInput = {
 }
 
 export const BROWSER_TASK_DESCRIPTION =
-  "Run one natural-language goal in a real browser. A Jev policy model — not you — chooses every click, " +
+  "Run one natural-language goal in a real browser. A Jev policy model chooses every click, " +
   "field value and target, so state the goal and its acceptance criteria instead of scripting steps. " +
   "Return the final URL, the page title and the action trace. The trace is a report, not proof: verify the " +
   "outcome before reporting success, and do not retry a browser mutation blindly."
@@ -157,13 +157,13 @@ export function parseRunnerOutput(stdout: string): BrowserRun | null {
 }
 
 export function formatRun(run: BrowserRun, goal: string): string {
-  const lines = [`browser_task ${run.ok ? "reported done" : "did not finish"} — ${run.status}`]
+  const lines = [`browser_task ${run.ok ? "reported done" : "did not finish"} (${run.status})`]
   if (run.error) lines.push(`error: ${run.error}`)
   if (goal) lines.push(`goal: ${goal}`)
   lines.push(`final url: ${run.url || "(unchanged)"}`)
   if (run.title) lines.push(`title: ${run.title}`)
   lines.push(
-    `steps: ${run.steps.length} — ${run.decisions} Jev decisions, $${run.costUsd.toFixed(6)}, ${run.elapsedMs} ms`,
+    `steps: ${run.steps.length} (${run.decisions} Jev decisions, $${run.costUsd.toFixed(6)}, ${run.elapsedMs} ms)`,
   )
   for (const step of run.steps) {
     const typed = step.text ? ` = ${JSON.stringify(step.text)}` : ""

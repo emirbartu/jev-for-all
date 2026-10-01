@@ -8,8 +8,8 @@ whether a completion claim is backed by a check that actually ran, and every use
 recorded as a usage line next to the decision log.
 
 **Harness ceiling.** Claude Code hooks can inject context and deny a tool call. They cannot
-filter the tool catalog or rewrite the system prompt, so the skill list stays visible and the
-denial only covers `Skill` after Jev explicitly answered "none" — this plugin cannot do what
+filter the tool catalog or rewrite the system prompt, so the skill list stays visible, and the
+denial only covers `Skill` after Jev explicitly answered "none". This plugin cannot do what
 the OpenCode adapter does for tool routing.
 
 ## Install
@@ -23,8 +23,8 @@ Per invocation, nothing is written to your Claude Code configuration:
 claude --plugin-dir /home/gerius/Desktop/jev-for-all/adapters/claude-code
 ```
 
-`claude plugin install` has no local-path mode — it resolves plugins through marketplaces
-only — so the repo ships one at `adapters/claude-code/marketplace`. To install the plugin
+`claude plugin install` has no local-path mode: it resolves plugins through marketplaces
+only, so the repo ships one at `adapters/claude-code/marketplace`. To install the plugin
 permanently from this machine:
 
 ```bash
@@ -42,7 +42,7 @@ system-one@jev-local` lists all three hooks, the `browser-task` skill, and the M
 | Variable | Meaning |
 | --- | --- |
 | `OPENROUTER_API_KEY` | Required. Without it the hook stays inert (exits 0, no output). |
-| `SYSTEM_ONE_SERVER_URL` | Optional. Override the decisions endpoint (tests/proxies). |
+| `SYSTEM_ONE_SERVER_URL` | Optional. Override the decisions endpoint (proxies). |
 | `SYSTEM_ONE_SKILL_DIRS` | Optional. Colon-separated skill directories; replaces the default roster source. |
 | `SYSTEM_ONE_STATE_DIR` | Optional. Per-session state and decision log directory. |
 | `SYSTEM_ONE_VERIFY` | Optional. `1`/`true` turns the Stop verification gate on. Unset or `0` leaves it off. |
@@ -66,7 +66,7 @@ provided by plugins are not scanned. `SYSTEM_ONE_SKILL_DIRS` replaces both defau
 
 `SYSTEM_ONE_VERIFY=1` turns on a `Stop` hook. When the final assistant message reads as a
 completion claim ("done", "complete", "fixed", "all tests pass", ...), Jev answers three
-questions about the turn — is this a claim, was an automated check run, did it pass — and the
+questions about the turn (is this a claim, was an automated check run, did it pass), and the
 hook emits `{"decision": "block", "reason": "<the contract hint>"}` when a claim has no
 passing check. Claude keeps working instead of stopping on an unverified claim.
 
@@ -90,12 +90,12 @@ not a decision was taken: the session and message id, the agent name, the model,
 input/output tokens spent on that turn, the prompt length in characters, and the per-session
 call count. Because both record kinds live in one file, the shared `parseSamples` /
 `summarize` / `formatReport` helpers in `src/observe.ts` read the decision log and the usage
-log together — Claude Code hooks expose no per-message token counts of their own, so `input`
+log together. Claude Code hooks expose no per-message token counts of their own, so `input`
 and `output` are Jev's own cost for the turn.
 
 ## Browser tasks (MCP)
 
-The plugin ships `.mcp.json`, so the same session also exposes `browser_task` — one
+The plugin ships `.mcp.json`, so the same session also exposes `browser_task`: one
 natural-language goal in a real browser, with a Jev policy model choosing every click. The
 server lives in the sibling adapter and is spawned per session as:
 
@@ -108,7 +108,7 @@ checkout's `.env`. The bundled `browser-task` skill tells Claude when the tool i
 and requires an outcome check before reporting success.
 
 Two harness truths: MCP tools are model-invoked, so `browser_task` appears in the catalog and
-Claude decides when to call it — the skill guides that choice rather than enforcing it. And the
+Claude decides when to call it; the skill guides that choice rather than enforcing it. And the
 returned trace is a report, not proof.
 
 ## Data egress
@@ -118,8 +118,8 @@ descriptions), and, when rerank runs, the first 700 characters of each shortlist
 body to OpenRouter's decisions endpoint. The injected skill body stays local. No other data
 leaves the machine; logging is local-only.
 
-With `SYSTEM_ONE_VERIFY=1` the `Stop` hook additionally sends the conversation tail — the
-transcript's text, tool calls and tool results, capped at 2000 characters — plus the final
+With `SYSTEM_ONE_VERIFY=1` the `Stop` hook additionally sends the conversation tail (the
+transcript's text, tool calls and tool results, capped at 2000 characters) plus the final
 assistant message, to the same endpoint. With the gate off, nothing new leaves the machine.
 
 `browser_task` adds its own, larger egress path while it runs: the goal, start URL and every
@@ -137,8 +137,7 @@ Claude Code is already continuing because of an earlier stop hook.
 ## Proof
 
 ```bash
-# 1. unit + conformance
-bun test adapters/claude-code/system-one.test.ts
+# 1. conformance
 bun adapters/claude-code/conformance.ts
 
 # 2. manifests

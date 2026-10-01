@@ -1,7 +1,6 @@
 """Jev skill decision for Hermes: contract load, roster scan, decision, injection, transport.
 
-Stdlib only. Mirrors src/skills.ts against the shared contract; the shared
-conformance fixtures are the parity check.
+Stdlib only. Mirrors src/skills.ts against the shared contract.
 """
 from __future__ import annotations
 

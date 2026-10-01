@@ -1,12 +1,12 @@
 ---
 name: browser-task
-description: Use when a task needs a real browser — navigating, filling, clicking, or reading a live page. State the goal and its acceptance criteria for the browser_task tool, then verify the outcome.
+description: Use when a task needs a real browser: navigating, filling, clicking, or reading a live page. State the goal and its acceptance criteria for the browser_task tool, then verify the outcome.
 ---
 
 # Browser tasks
 
-`browser_task` runs one natural-language goal in a real browser. A Jev policy model — not
-you — chooses every click, field value and target, so state the goal and how to tell it
+`browser_task` runs one natural-language goal in a real browser. A Jev policy model, not
+you, chooses every click, field value and target, so state the goal and how to tell it
 succeeded instead of scripting selectors.
 
 - Reach for it when the work needs a live page: filling a form, walking a site, reading a

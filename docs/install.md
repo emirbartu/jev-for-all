@@ -6,10 +6,10 @@ One command registers the OpenCode plugin in the user's config:
 bunx jev-for-all install
 ```
 
-Or use the native manager: `opencode plugin add jev-for-all` writes `"plugins": ["jev-for-all"]`
-(it cannot add `options`; set `OPENROUTER_API_KEY`).
+Or use the native manager: `opencode plugin add jev-for-all` writes `"plugins": ["jev-for-all"]`.
+It cannot add `options`, so set `OPENROUTER_API_KEY`.
 
-- It writes this entry into `~/.config/opencode/opencode.jsonc` (or
+- The installer writes this entry into `~/.config/opencode/opencode.jsonc` (or
   `$XDG_CONFIG_HOME/opencode/opencode.jsonc`), inserting it first in the `"plugins"` array:
 
   ```jsonc
@@ -20,7 +20,7 @@ Or use the native manager: `opencode plugin add jev-for-all` writes `"plugins": 
   }
   ```
 
-- It is idempotent: an existing `jev-for-all` entry (npm name or a clone path ending in
+- It is idempotent. An existing `jev-for-all` entry (npm name or a clone path ending in
   `/jev-for-all`) is left alone.
 - Flags: `--config <path>` targets another config file; `--key <sk-or-...>` skips the prompt;
   `--dry-run` prints the edited text without writing.
@@ -32,9 +32,9 @@ Or use the native manager: `opencode plugin add jev-for-all` writes `"plugins": 
 
 1. Restart OpenCode.
 2. `opencode plugin list` shows `jev-for-all`.
-3. The plugin loads with the session; with `"debug": true` in the options, routing decisions log
+3. The plugin loads with the session. With `"debug": true` in the options, routing decisions log
    to the console.
-4. `bunx jev-for-all install` again prints `already installed — nothing to do`.
+4. `bunx jev-for-all install` again prints `already installed, nothing to do`.
 
 ## Uninstall
 

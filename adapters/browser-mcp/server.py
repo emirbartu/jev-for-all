@@ -22,7 +22,7 @@ def browser_task(goal: str, url: str = "about:blank", max_steps: int | None = No
     try:
         run, _ = run_browser_task(goal=goal, config=BrowserConfig.from_env(), url=url, max_steps=max_steps)
         return format_run(run, goal)
-    except Exception as error:  # noqa: BLE001 — never raise into the protocol
+    except Exception as error:  # noqa: BLE001 (never raise into the protocol)
         return f"browser_task failed: {error}"
 
 

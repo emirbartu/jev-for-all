@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// jev-for-all installer — zero-dependency ESM, runs under node and bun.
+// jev-for-all installer: zero-dependency ESM, runs under node and bun.
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join, resolve } from "node:path"
@@ -209,7 +209,7 @@ export async function install({ configPath, key, dryRun = false }) {
   return { status: "installed", path: configPath, text: updated, dryRun }
 }
 
-const USAGE = `jev-for-all — OpenCode plugin installer
+const USAGE = `jev-for-all: OpenCode plugin installer
 
 Usage:
   jev-for-all install [--config <path>] [--key <sk-or-...>] [--dry-run]
@@ -249,7 +249,7 @@ async function main() {
   if (!key && process.stdin.isTTY && process.stdout.isTTY) key = await promptKey()
   const result = await install({ configPath, key: key || undefined, dryRun: args.dryRun })
   if (result.status === "already") {
-    console.log(`already installed — nothing to do (${configPath})`)
+    console.log(`already installed, nothing to do (${configPath})`)
     return
   }
   if (result.status === "invalid") {

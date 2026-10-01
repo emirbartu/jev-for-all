@@ -7,7 +7,7 @@ short "skills are routed externally" line is injected.
 
 **Harness ceiling.** `pre_llm_call` is Hermes' context-injection hook: it can append text to
 the current turn's user message and nothing else. It cannot filter the tool catalog or rewrite
-the system prompt, so the skill list stays visible and this plugin never touches either — the
+the system prompt. The skill list stays visible and this plugin never touches either, so the
 prompt cache stays intact.
 
 ## Install
@@ -31,7 +31,7 @@ user's step: it writes `plugins.enabled` into `${HERMES_HOME:-$HOME/.hermes}/con
   are skipped, and each skill's `id` is its leaf directory name. Each skill's `name`,
   `description`, and body are parsed from its frontmatter; a file without frontmatter still
   counts, using its directory name. A duplicate id keeps the top-level occurrence.
-- Decision contract: `assets/decisions.json` — gate thresholds, confidence floor, rerank
+- Decision contract (`assets/decisions.json`): gate thresholds, confidence floor, rerank
   settings, injection cap (8000 chars), and the spend cap. Code paths read from it; no
   thresholds are hardcoded.
 
@@ -52,7 +52,7 @@ are never modified.
 
 When the `verify` setting is on, the `pre_verify` hook runs after a turn that edited code: if
 the final response claims completion and Jev judges that no check has run and passed since the
-change, the hook returns one continue directive — the contract's `control.hint` — asking the
+change, the hook returns one continue directive, the contract's `control.hint`, which asks the
 agent to run the relevant check (or state that none applies). One nudge per turn
 (`attempt == 0`; Hermes' `agent.max_verify_nudges` is the outer bound), never a block, and any
 failure leaves the turn exactly as it was.
@@ -73,7 +73,7 @@ Capabilities → Plugins form (driven by `plugin.yaml`'s `config_schema`):
 
 ## Decision log
 
-Every Jev call appends one JSON line to `decisions.jsonl` **next to the module** — in a repo
+Every Jev call appends one JSON line to `decisions.jsonl` **next to the module**: in a repo
 checkout `adapters/hermes/system_one/decisions.jsonl`, installed
 `$HERMES_HOME/plugins/system-one/decisions.jsonl`. The line records the chosen skill (or
 `none` / `no-change`), the resolved model id, token usage, latency, and the per-session call
@@ -90,7 +90,7 @@ in the shape the OpenCode recorder writes (`src/observe.ts`), plus the `harness`
 ```
 
 `messageID` is the host's `turn_id` (a digest of the user message when the host sends none), and
-the line lands whatever else the turn does — no roster, no API key, or no Jev call still records
+the line lands whatever else the turn does: no roster, no API key, or no Jev call still records
 the row. The token buckets are zero: `pre_llm_call` carries no counts, because Hermes reports real
 per-call usage on `post_api_request`, which this plugin does not register. The row makes a Hermes
 session visible to `scripts/decision-report.ts`; it does not yet price it. Nothing leaves the
@@ -110,7 +110,7 @@ sent, and the decision log is local-only.
 The hooks never raise and never change the request on failure: a missing `OPENROUTER_API_KEY`,
 an empty roster, a timeout, a non-2xx, a malformed answer, an unknown skill id, or a
 low-confidence answer all leave Hermes' behavior exactly as it was. The verification nudge
-fails the same way — a failed decision lets the turn finish.
+fails the same way: a failed decision lets the turn finish.
 
 ## Proof
 
@@ -145,13 +145,13 @@ lands; that is the proof the hook ran.
 
 ## Skill decision quality (L1)
 
-Run 2026-09-24 against the real Hermes roster — 78 skills (76 under `<category>/<skill>/`, plus
-top-level `i-have-adhd` and the `find-skills` symlink) — with the adapter's real `decide()`,
+Run 2026-09-24 against the real Hermes roster: 78 skills (76 under `<category>/<skill>/`, plus
+top-level `i-have-adhd` and the `find-skills` symlink), with the adapter's real `decide()`,
 model `~typesafe/jev-latest`. Corpus: the 12 covered cases in `fixtures/skill-eval/hermes-cases.jsonl`,
 written from the skills' own `SKILL.md` descriptions, plus the 20 `expected: null` cases from
 `fixtures/skill-eval/agents-skills-cases.jsonl`. The adapter asks the advisory-work question
-(parity with the TS core), and folded `description: >` frontmatter now parses correctly — all 78
-real skills have a non-empty description.
+(parity with the TS core), and folded `description: >` frontmatter now parses correctly, and all
+78 real skills have a non-empty description.
 
 ```bash
 OPENROUTER_API_KEY=... python3 adapters/hermes/eval/skill_l1.py --max-usd 0.10
@@ -171,14 +171,8 @@ stay under `.superpowers/hermes-l1/` (gitignored).
 ### Timeout
 
 Measured 2026-09-24 at 78 skills: a single Jev request (rank criteria for all 78 + the gate
-nouls) takes **758–910 ms** (avg 817 ms, 5 samples), and a full `decide()` — often two requests,
-because the roster exceeds `rerankAbove` — 1.1–1.7 s. The old 1 s per-request default left
+nouls) takes **758–910 ms** (avg 817 ms, 5 samples), and a full `decide()`, often two requests
+because the roster exceeds `rerankAbove`, takes 1.1–1.7 s. The old 1 s per-request default left
 ~90 ms of headroom, and an earlier slow window (4.5 s per decide) would have timed out every
 call; the default is now **2000 ms** per request (`timeout_ms`), with `--timeout-ms` on the
 runner for experiments. Both today's runs (1000 ms and 6000 ms) had zero request errors.
-
-## Tests
-
-```bash
-python3 -m unittest discover -s adapters/hermes/tests -v
-```

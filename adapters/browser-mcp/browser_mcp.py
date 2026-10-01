@@ -19,7 +19,7 @@ DEFAULT_MAX_STEPS = 12
 DEFAULT_TIMEOUT_MS = 180_000
 
 BROWSER_TASK_DESCRIPTION = (
-    "Run one natural-language goal in a real browser. A Jev policy model — not you — chooses "
+    "Run one natural-language goal in a real browser. A Jev policy model chooses "
     "every click, field value and target, so state the goal and its acceptance criteria instead "
     "of scripting steps. Return the final URL, the page title and the action trace. The trace is "
     "a report, not proof: verify the outcome before reporting success, and do not retry a browser "
@@ -134,7 +134,7 @@ def failed_run(reason: str, **extra) -> dict:
 
 
 def format_run(run: dict, goal: str) -> str:
-    lines = [f"browser_task {'reported done' if run['ok'] else 'did not finish'} — {run['status']}"]
+    lines = [f"browser_task {'reported done' if run['ok'] else 'did not finish'} ({run['status']})"]
     if run.get("error"):
         lines.append(f"error: {run['error']}")
     if goal:
@@ -143,7 +143,7 @@ def format_run(run: dict, goal: str) -> str:
     if run.get("title"):
         lines.append(f"title: {run['title']}")
     lines.append(
-        f"steps: {len(run['steps'])} — {run['decisions']} Jev decisions, ${run['costUsd']:.6f}, {run['elapsedMs']} ms"
+        f"steps: {len(run['steps'])} ({run['decisions']} Jev decisions, ${run['costUsd']:.6f}, {run['elapsedMs']} ms)"
     )
     for step in run["steps"]:
         typed = f" = {json.dumps(step.get('text'), ensure_ascii=False)}" if step.get("text") else ""
@@ -219,7 +219,7 @@ def run_browser_task(
             {"JEV_TASK_GOAL": goal, "JEV_TASK_URL": start_url, "JEV_TASK_MAX_STEPS": str(budget)},
             config.timeout_ms,
         )
-    except Exception as error:  # noqa: BLE001 — every spawn failure is a readable result
+    except Exception as error:  # noqa: BLE001 (every spawn failure is a readable result)
         return failed_run(f"browser_task could not start {config.uv_path}: {error}"), command
 
     if outcome.timed_out:

@@ -152,13 +152,17 @@ def select_skill(ask: Ask, request: str, skills: Iterable[dict]) -> str | None:
                 ids["gateProcedure"]: {"type": "noul", "instructions": questions["gateProcedure"]},
                 ids["gateProse"]: {"type": "noul", "instructions": questions["gateProse"]},
                 ids["advisory"]: {"type": "noul", "instructions": questions["advisory"]},
+                ids["gateMechanical"]: {"type": "noul", "instructions": questions["gateMechanical"]},
             },
         )
         acts = as_noul(first.get(ids["gateActs"]))
         procedure = as_noul(first.get(ids["gateProcedure"]))
         prose = as_noul(first.get(ids["gateProse"]))
         advisory = as_noul(first.get(ids["advisory"]))
-        if acts is None or procedure is None or prose is None or advisory is None:
+        mechanical = as_noul(first.get(ids["gateMechanical"]))
+        if acts is None or procedure is None or prose is None or advisory is None or mechanical is None:
+            return None
+        if mechanical >= config["mechanicalVeto"]:
             return None
         gate = (acts + procedure + (1 - prose)) / 3
         if gate < config["gateThreshold"] and advisory < config["advisoryThreshold"]:
@@ -229,7 +233,7 @@ def decide(ask: Ask | None, request: str, skills: Iterable[dict]) -> tuple[str, 
             choice = as_choice(answers.get(ids["rank"]))
             gate_ok = all(
                 as_noul(answers.get(ids[key])) is not None
-                for key in ("gateActs", "gateProcedure", "gateProse", "advisory")
+                for key in ("gateActs", "gateProcedure", "gateProse", "advisory", "gateMechanical")
             )
             confidence = choice["confidence"] if choice and choice["confidence"] is not None else 1
             state["confident_none"] = bool(choice) and gate_ok and confidence >= POLICY["skills"]["minConfidence"]

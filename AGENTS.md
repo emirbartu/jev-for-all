@@ -77,6 +77,7 @@ tool-result bodies is not an option today.
 | `bun scripts/conformance.ts` | Shared 9-case conformance against the TS core and the Claude Code adapter. |
 | `OPENROUTER_API_KEY=... bun scripts/jev-probe.ts decisions` | Live Jev smoke test (noul and choice). |
 | `OPENROUTER_API_KEY=... bun scripts/jev-probe.ts catalog tools.json [task]` | Live tool-routing probe against a tool catalog. |
+| `OPENROUTER_API_KEY=... bun scripts/agents-l1.ts` | Live subagent-selection check (12 cases). |
 | `bun scripts/eval.ts` | Headless baseline-vs-routed usage eval. Needs `opencode` on PATH, provider auth, and optionally `EVAL_MODEL`. |
 
 Install for use is a local path (`{ "package": "/abs/path/to/repo" }`); the package is not
@@ -96,7 +97,8 @@ push `main`. npm package `jev-for-all`; npm user `emirb42`.
 | --- | --- |
 | `index.ts` | `Plugin.define`, `readOptions`, hook wiring, cache, cleanup. Also exports helpers (`readOptions`, `createCache`, `hashKey`, `createWarnOnce`). |
 | `src/jev.ts` | Transport plus runtime guards `asChoice` and `asNoul`. |
-| `src/skills.ts` | Gate (3 nouls) -> rank (choice) -> optional rerank (shortlist plus `fits::<id>` nouls) -> `{ id }` or `null`. |
+| `src/skills.ts` | Gate (3 nouls + `gate::mechanical` veto) -> rank (choice) -> optional rerank (shortlist plus `fits::<id>` nouls) -> `{ id }` or `null`. |
+| `src/agents.ts` | `selectAgent`: `delegate` noul plus a choice over subagents with a `none` option (used by the Claude Code adapter). |
 | `src/tools.ts` | `renderState`, `routeTools`, `applyToolDecision`. |
 | `src/observe.ts` | Usage JSONL recorder, parse, summarize and report helpers. |
 | `src/browser.ts` plus `src/jev-runner.py` | The `browser_task` tool: builds the `uv run` command, parses one `JEV_RESULT` JSON line, fails open. The Python side runs one Jev Ultrafast goal and prints that line; it never raises. |

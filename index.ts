@@ -97,6 +97,11 @@ export function readOptions(raw: Record<string, unknown>): ResolvedOptions {
         skills.advisoryThreshold,
         defaultSkillRouting.advisoryThreshold,
       ),
+      mechanicalVeto: number(
+        "skills.mechanicalVeto",
+        skills.mechanicalVeto,
+        defaultSkillRouting.mechanicalVeto,
+      ),
       rerank: rerank(skills.rerank),
       rerankAbove: number("skills.rerankAbove", skills.rerankAbove, defaultSkillRouting.rerankAbove),
       rerankBelowP: number("skills.rerankBelowP", skills.rerankBelowP, defaultSkillRouting.rerankBelowP),

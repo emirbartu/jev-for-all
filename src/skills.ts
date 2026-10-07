@@ -11,6 +11,7 @@ export interface SkillLike {
 export interface SkillRoutingConfig {
   gateThreshold: number
   advisoryThreshold: number
+  mechanicalVeto: number
   rerank: boolean | "auto"
   rerankAbove: number
   rerankBelowP: number
@@ -22,6 +23,7 @@ export interface SkillRoutingConfig {
 export const defaultSkillRouting: SkillRoutingConfig = {
   gateThreshold: policy.skills.gateThreshold,
   advisoryThreshold: policy.skills.advisoryThreshold,
+  mechanicalVeto: policy.skills.mechanicalVeto,
   rerank: policy.skills.rerank,
   rerankAbove: policy.skills.rerankAbove,
   rerankBelowP: policy.skills.rerankBelowP,
@@ -57,6 +59,7 @@ export async function selectSkill(
         [ids.gateProcedure]: { type: "noul", instructions: questions.gateProcedure },
         [ids.gateProse]: { type: "noul", instructions: questions.gateProse },
         [ids.advisory]: { type: "noul", instructions: questions.advisory },
+        [ids.gateMechanical]: { type: "noul", instructions: questions.gateMechanical },
       },
     })
 
@@ -64,7 +67,9 @@ export async function selectSkill(
     const procedure = asNoul(first[ids.gateProcedure])
     const prose = asNoul(first[ids.gateProse])
     const advisory = asNoul(first[ids.advisory])
-    if (!acts || !procedure || !prose || !advisory) return null
+    const mechanical = asNoul(first[ids.gateMechanical])
+    if (!acts || !procedure || !prose || !advisory || !mechanical) return null
+    if (mechanical.noul >= config.mechanicalVeto) return null
     const gate = (acts.noul + procedure.noul + (1 - prose.noul)) / 3
     if (gate < config.gateThreshold && advisory.noul < config.advisoryThreshold) return null
 

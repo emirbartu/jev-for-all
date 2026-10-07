@@ -28,6 +28,7 @@ export async function decide(ask: Ask | undefined, request: string, skills: read
         policy.skills.ids.gateProcedure,
         policy.skills.ids.gateProse,
         policy.skills.ids.advisory,
+        policy.skills.ids.gateMechanical,
       ]
       const gateOk = gateIds.every((id) => asNoul(answers[id]) !== null)
       confidentNone = choice !== null && gateOk && (choice.confidence ?? 1) >= policy.skills.minConfidence

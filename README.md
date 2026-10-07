@@ -56,7 +56,11 @@ Let your agent install it: point it at
 
 ## What Jev decides
 
-- Which skill to load, one from the whole roster, chosen for each user message.
+- Which skill to load, one from the whole roster, chosen for each user message. Small mechanical
+  steps (rename, bump a value, read a file, run one command) are vetoed up front by
+  `gate::mechanical`, so they get no skill (`skills.mechanicalVeto`, default 0.5).
+- Whether to hand the request to a subagent (Claude Code adapter), and which one. Most requests
+  stay with the main agent; only broad search, independent research or parallel work delegates.
 - Which tool subset this step needs, so the agent picks from a smaller catalog.
 - Every operation inside `browser_task`: given a goal, Jev picks each click, target and typed
   value.

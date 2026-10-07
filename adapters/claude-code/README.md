@@ -52,6 +52,14 @@ system-one@jev-local` lists all three hooks, the `browser-task` skill, and the M
 By default the roster is scanned from `~/.claude/skills` and `<cwd>/.claude/skills`. Skills
 provided by plugins are not scanned. `SYSTEM_ONE_SKILL_DIRS` replaces both defaults when set.
 
+## Subagent delegation
+
+Each prompt also gets one `delegate` + `agent` Jev call, in parallel with the skill call, over
+the built-in subagents (`Explore`, `Plan`, `general-purpose`) plus `~/.claude/agents/*.md` and
+`<cwd>/.claude/agents/*.md`. The choice includes a `none` option; unless Jev is at least 0.6
+sure delegating pays off, nothing is injected. When it does, a `<system_one_agents>` hint tells
+the main agent to use the Agent tool with that subagent. The request text is the only thing sent.
+
 ## What it injects
 
 - Jev picked a skill: the skill body (capped at 8000 chars; past the cap, a pointer to the
@@ -59,6 +67,8 @@ provided by plugins are not scanned. `SYSTEM_ONE_SKILL_DIRS` replaces both defau
 - Jev answered "none": the fixed line `Skills are routed externally for this session; do not
   call the Skill tool.`, and `Skill` calls in that session are denied with the same reason
   until the next prompt overwrites the decision.
+- Jev picked a subagent: the `<system_one_agents>` delegation hint, appended to the same
+  `additionalContext`.
 - Transport error, low confidence, no API key, malformed stdin, empty roster: nothing is
   printed and the hook exits 0.
 

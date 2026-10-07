@@ -8,6 +8,7 @@
     "fitsThreshold": 0.3,
     "minConfidence": 0.3,
     "advisoryThreshold": 0.5,
+    "mechanicalVeto": 0.5,
     "ids": {
       "rank": "which",
       "rerank": "which",
@@ -15,6 +16,7 @@
       "gateProcedure": "gate::procedure",
       "gateProse": "gate::prose",
       "advisory": "gate::advisory",
+      "gateMechanical": "gate::mechanical",
       "fits": "fits::{{id}}"
     },
     "questions": {
@@ -24,6 +26,7 @@
       "gateProcedure": "Would a careful expert answering this consult a specific documented procedure or set of commands, rather than answering from general understanding?",
       "gateProse": "Could a knowledgeable generalist fully satisfy this request in prose, with no tools, no documentation, and no access to the user's files or accounts?",
       "advisory": "Does this request ask for creative or advisory work on the user's software project — designing, planning, brainstorming, reviewing, or dispatching development work — where a documented process should guide the assistant, rather than a specific mechanical change?",
+      "gateMechanical": "Is this a small, self-contained mechanical step, such as renaming, editing a line, bumping a value, reading a file, running one command, or calling one named tool, that needs no documented process or workflow?",
       "fits": "Does the skill '{{name}}' do the specific thing the user's request asks for?"
     },
     "criteria": {

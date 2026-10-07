@@ -4,6 +4,7 @@ import { join } from "node:path"
 export interface SkillPolicy {
   gateThreshold: number
   advisoryThreshold: number
+  mechanicalVeto: number
   rerank: boolean | "auto"
   rerankAbove: number
   rerankBelowP: number
@@ -17,6 +18,7 @@ export interface SkillPolicy {
     gateProcedure: string
     gateProse: string
     advisory: string
+    gateMechanical: string
     fits: string
   }
   questions: {
@@ -26,6 +28,7 @@ export interface SkillPolicy {
     gateProcedure: string
     gateProse: string
     advisory: string
+    gateMechanical: string
     fits: string
   }
   criteria: {
@@ -92,8 +95,20 @@ export interface SpendPolicy {
   warnAt: number
 }
 
+export interface AgentPolicy {
+  delegateThreshold: number
+  minConfidence: number
+  ids: { pick: string; delegate: string }
+  none: string
+  noneLabel: string
+  questions: { delegate: string; pick: string }
+  builtin: Array<{ id: string; description: string }>
+  hint: string
+}
+
 export interface Policy {
   skills: SkillPolicy
+  agents: AgentPolicy
   tools: ToolPolicy
   control: ControlPolicy
   cache: CachePolicy

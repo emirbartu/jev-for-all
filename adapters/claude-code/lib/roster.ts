@@ -1,5 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
+import { policy } from "../../../src/policy"
+import type { AgentLike } from "../../../src/agents"
 
 export interface SkillFile {
   id: string
@@ -10,7 +12,7 @@ export interface SkillFile {
 }
 
 // Port of _parse_frontmatter in adapters/hermes/system_one/decision.py; the two must stay in sync.
-function parseFrontmatter(text: string): { name?: string; description?: string; body: string } {
+export function parseFrontmatter(text: string): { name?: string; description?: string; body: string } {
   if (!text.startsWith("---")) return { body: text }
   const end = text.indexOf("\n---", 3)
   if (end === -1) return { body: text }
@@ -81,4 +83,27 @@ export function scanSkillDirs(dirs: readonly string[]): SkillFile[] {
 
 export function defaultSkillDirs(cwd: string): string[] {
   return [join(process.env.HOME ?? "", ".claude", "skills"), join(cwd, ".claude/skills")]
+}
+
+// Subagents: the built-ins from the spec plus any `<dir>/*.md` custom agent (frontmatter name/description).
+export function scanAgentDirs(dirs: readonly string[]): AgentLike[] {
+  const agents = new Map<string, AgentLike>(policy.agents.builtin.map((agent) => [agent.id, agent]))
+  for (const dir of dirs) {
+    let entries: string[] = []
+    try {
+      entries = readdirSync(dir).filter((entry) => entry.endsWith(".md") && !entry.startsWith(".")).sort()
+    } catch {}
+    for (const entry of entries) {
+      try {
+        const parsed = parseFrontmatter(readFileSync(join(dir, entry), "utf8"))
+        const id = parsed.name || entry.slice(0, -3)
+        agents.set(id, { id, description: parsed.description })
+      } catch {}
+    }
+  }
+  return [...agents.values()]
+}
+
+export function defaultAgentDirs(cwd: string): string[] {
+  return [join(process.env.HOME ?? "", ".claude", "agents"), join(cwd, ".claude/agents")]
 }

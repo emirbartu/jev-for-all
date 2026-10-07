@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs"
 import { createJev, type Ask } from "../../../src/jev"
 import { policy } from "../../../src/policy"
 import { NONE_CONTEXT, decide, injectionFor } from "../lib/decide"
-import { defaultSkillDirs, scanSkillDirs } from "../lib/roster"
+import { agentHint, selectAgent } from "../../../src/agents"
+import { defaultAgentDirs, defaultSkillDirs, scanAgentDirs, scanSkillDirs } from "../lib/roster"
 import { readState, writeState, type SessionState } from "../lib/state"
 import { logDecision, logUsage } from "../lib/log"
 import { decideVerification, verifyEnabled, verifyMessages } from "../lib/verify"
@@ -82,18 +83,28 @@ async function userPromptSubmit(input: HookInput): Promise<void> {
   const ask = newAsk(meta)
 
   const started = Date.now()
-  const decision = await decide(ask, input.prompt ?? "", skills)
-  const calls = state.calls + 1
+  const agents = scanAgentDirs(defaultAgentDirs(input.cwd ?? process.cwd()))
+  // Skill and subagent decisions are independent Jev calls, so they run in parallel.
+  const [decision, agent] = await Promise.all([
+    decide(ask, input.prompt ?? "", skills),
+    ask ? selectAgent(ask, { request: input.prompt ?? "", agents }) : Promise.resolve(null),
+  ])
+  const calls = state.calls + (ask ? 2 : 1)
+  const context: string[] = []
 
   if (decision.kind === "skill") {
     const skill = skills.find((candidate) => candidate.id === decision.id)
     writeState(sessionID, { decision: "skill", at: Date.now(), calls, messages })
-    if (skill) emit({ hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: injectionFor(skill) } })
+    if (skill) context.push(injectionFor(skill))
   } else if (decision.kind === "none") {
     writeState(sessionID, { decision: "none", at: Date.now(), calls, messages })
-    emit({ hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: NONE_CONTEXT } })
+    context.push(NONE_CONTEXT)
   } else {
     writeState(sessionID, { at: Date.now(), calls, messages })
+  }
+  if (agent) context.push(agentHint(agent))
+  if (context.length > 0) {
+    emit({ hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: context.join("\n\n") } })
   }
 
   logDecision({

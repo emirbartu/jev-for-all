@@ -7,6 +7,59 @@ which skill to load, which tools a step needs, and how to move in the browser.
 For the reasoning behind the design, including where Jev wins and where it loses, see
 [When Jev wins](WHERE-JEV-WINS.md).
 
+## Read this first
+
+**This project is fully experimental. Do not use it in important or production-grade projects.**
+
+It will probably not cause harm. It does not edit your code, your git history or your agent's settings
+(it adds its own config folder and registers itself as a plugin, and that is all). My concern is a different
+one: **token and context integrity.** Parts of this plugin pick a model for you, hand work to a cheaper
+model, or add text to your agent's context. If a guess is wrong, you can spend more tokens than you save, or
+a cheap model can get a job it handles badly, and you may not notice.
+
+### What you get
+
+- **Cheaper sessions for easy work.** On 12 small coding tasks, letting Jev pick the model cost 35% less than
+  always using Sonnet, and the results were the same.
+- **Fewer wasted tokens at the start.** For simple tasks that need no skills or MCP servers, a "lean" launch
+  used 37% fewer input tokens with the same results.
+- **Fast and cheap decisions.** About half a second and roughly $0.0001 each. If Jev is slow, down or unsure,
+  the plugin does nothing instead of guessing.
+- **A paper trail.** Every claim here comes from a script in this repo, and the things that failed are written
+  down in [WHERE-JEV-WINS.md](WHERE-JEV-WINS.md).
+- **Easy to remove.** See [Uninstall](docs/install.md#uninstall).
+
+### What can go wrong
+
+- **The evidence is thin.** The numbers above come from 12 small, single-file tasks, one run each, and I wrote
+  the tasks and the answer keys. Real projects are bigger and messier, so expect the savings to be smaller and
+  the mistakes to be more common.
+- **The model is chosen once, from your first prompt.** If a session starts with an easy request and turns into
+  hard work, it stays on the cheaper model. Restart with `jev-for-all start` or switch with `/model`.
+- **It sometimes picks wrong.** In my own tests it sent about 2 of every 58 ordinary prompts to the cheaper
+  tier when a stronger one was the better fit.
+- **Hints can cost more than they save.** The per-prompt skill and subagent hints add text to your
+  conversation. In one real session they added 18 skill suggestions that were never useful, and in a small test
+  the prompts that got a hint cost 50 to 70 percent more. They are **off by default** for that reason.
+- **It has blocked things before.** An older version could refuse a slash command such as `/loop` because it was
+  not in Jev's skill list. That is fixed, but there are probably more bugs like it.
+- **Lean mode turns things off.** A lean session has no skills and no MCP servers until you restart it.
+- **Each decision adds a delay,** about half a second, more if hints are on.
+- **Large parts are not measured at all:** the OpenCode tool filtering, subagent hints from start to finish,
+  big multi-file projects, and what any of this does to your Claude plan's usage limit (the costs above are
+  dollar-equivalents reported by Claude Code, not plan usage).
+- **The cheaper DeepSeek option has not been tested for real.** It needs a working OpenCode Go login, and mine
+  was rejected, so I only tested it against a stand-in.
+- **The free local option (Laya) is much less accurate than Jev.** Details in the Laya section below.
+- **Your text leaves your machine.** Decisions are made by Jev through OpenRouter's alpha API, which can change
+  or disappear. Your prompt goes to it, and in the OpenCode plugin so does the recent conversation, including
+  tool output. See [Privacy](#privacy-and-fail-open-behavior).
+
+### If you try it anyway
+
+Use a throwaway project first. Run `jev-for-all doctor` after installing. Leave the hints off. Keep an eye on
+your own token use for a few sessions, and compare it with what you normally spend.
+
 ## What this is
 
 Jev runs on OpenRouter's alpha Decisions API. It is not an LLM. You pass it state, it returns
@@ -69,6 +122,9 @@ Let your agent install it: point it at
 [Full configuration](#full-configuration).
 
 ## Results
+
+These are the original numbers from a test set the author wrote, so treat them as best case. See
+[Read this first](#read-this-first) for what real use looked like.
 
 - Skill routing: 64 real requests against a 22-skill roster, 0 wrong picks and an 85.9% hit rate.
   A full run costs about $0.005.
@@ -260,9 +316,9 @@ OPENROUTER_API_KEY=... bun scripts/jev-probe.ts decisions  # live Jev smoke test
 
 ## Status
 
-Skill and tool routing are shipped and measured. The verification gate is built and measured
-(80.0% hit on 15 cases, above its bar) and ships off (`control.verify`) pending an L2 run. Next is
-the routing-quality design pass.
+Experimental, see [Read this first](#read-this-first). Releases while the version is 0.x.y only change the last
+number. Per-prompt hints are off by default, the verification gate is off (`control.verify`) until it has an
+agent-level test, and most of what is described here has been measured only on small test sets.
 
 ---
 

@@ -74,6 +74,20 @@ did not hold.
   100. No distribution to classify. Killed.
 - Diff-risk ranking: 186 entries; Jev top-3 31% against a path heuristic at 33% and chance at 30%
   ($0.0115, 0 errors). Killed, because it lost to the dumb heuristic it had to beat.
+- Self-hosted Laya as a drop-in for Jev (2026-10-08, RTX 3060, same corpora and questions): skill
+  routing hit rate 37.5% (`english`) and 42.2% (`typed-decisions`) against Jev's 93.8%, with 23.4% and
+  31.3% wrong picks against 0%; model-tier accuracy 41.7% to 64.6% against 95.8%; it never delegated to
+  a subagent. It is 20 times faster (21 ms median) and free, but a wrong skill pick is worse than none.
+  Support stays in the code behind `LAYA_BASE_URL`; use it only after fine-tuning (see the README).
+- Per-prompt skill injection in Claude Code, measured two ways. Pilot, 5 prompts, one run each: the two
+  prompts that got a skill or a delegation cost 52% and 72% more than without, and every routed run was
+  slower (0.4 to 22 s). Live, one working session: 19 skill injections, 18 of them `find-skills`, none
+  used. The 64-case corpus said 0% spurious; real prompts (planning talk, R&D, "how is the repo") open
+  the advisory gate and the forced rank then names the nearest skill. Corpora written by the author
+  overstate accuracy on real traffic.
+- Not measured: the OpenCode tool-filtering hook (the original token-saving claim). `scripts/eval.ts`
+  could not run because the `opencode-go` provider rejected its credential, and its two fixture tasks
+  are too small to say anything anyway.
 - Threshold tuning alone: genuine misses score 0.12 to 0.28, spurious picks 0.39 to 0.88. No
   threshold separates them. Tuning does not create signal that is not in the state.
 

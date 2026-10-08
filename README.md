@@ -314,12 +314,6 @@ bun run typecheck                                        # type check
 OPENROUTER_API_KEY=... bun scripts/jev-probe.ts decisions  # live Jev smoke test
 ```
 
-## Status
-
-Experimental, see [Read this first](#read-this-first). Releases while the version is 0.x.y only change the last
-number. Per-prompt hints are off by default, the verification gate is off (`control.verify`) until it has an
-agent-level test, and most of what is described here has been measured only on small test sets.
-
 ---
 
 Jev is a TypeSafe model; this is an independent integration, and the repo is not affiliated with

@@ -68,6 +68,13 @@ async function userPromptSubmit(input: HookInput): Promise<void> {
       time: Date.now(),
     })
   }
+  // An explicit slash command is the user's own routing decision, and plugin or built-in skills are not in the
+  // roster, so Jev would answer "no skill" and the Skill tool would be denied. Never interfere with it.
+  if ((input.prompt ?? "").trimStart().startsWith("/")) {
+    writeState(sessionID, { at: Date.now(), calls: state.calls, messages })
+    logTurn(state.calls)
+    return
+  }
   const skills = scanSkillDirs(skillDirs(input))
   if (skills.length === 0) {
     logTurn(state.calls)

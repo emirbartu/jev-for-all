@@ -44259,6 +44259,11 @@ async function userPromptSubmit(input) {
       time: Date.now()
     });
   };
+  if ((input.prompt ?? "").trimStart().startsWith("/")) {
+    writeState(sessionID, { at: Date.now(), calls: state.calls, messages });
+    logTurn(state.calls);
+    return;
+  }
   const skills = scanSkillDirs(skillDirs(input));
   if (skills.length === 0) {
     logTurn(state.calls);

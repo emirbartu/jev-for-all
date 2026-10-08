@@ -2,9 +2,10 @@ import { readFileSync } from "node:fs"
 import { createJev, resolveKey, type Ask } from "../../../src/jev"
 import { policy } from "../../../src/policy"
 import { NONE_CONTEXT, decide, injectionFor } from "../lib/decide"
-import { agentHint, selectAgent, subagentTier } from "../../../src/agents"
-import { modelFor, selectTier } from "../../../src/models"
+import { agentHint, lightHint, selectAgent } from "../../../src/agents"
+import { resolvePlan, selectTier } from "../../../src/models"
 import { defaultAgentDirs, defaultSkillDirs, scanAgentDirs, scanSkillDirs } from "../lib/roster"
+import { ensureConfig } from "../../../src/config"
 import { readState, writeState, type SessionState } from "../lib/state"
 import { logDecision, logUsage } from "../lib/log"
 import { decideVerification, verifyEnabled, verifyMessages } from "../lib/verify"
@@ -86,11 +87,12 @@ async function userPromptSubmit(input: HookInput): Promise<void> {
   const started = Date.now()
   const agents = scanAgentDirs(defaultAgentDirs(input.cwd ?? process.cwd()))
   // Skill and subagent decisions are independent Jev calls, so they run in parallel.
-  const [decision, agent] = await Promise.all([
+  const [decision, agent, tier] = await Promise.all([
     decide(ask, input.prompt ?? "", skills),
     ask ? selectAgent(ask, { request: input.prompt ?? "", agents }) : Promise.resolve(null),
+    ask ? selectTier(ask, input.prompt ?? "") : Promise.resolve(null),
   ])
-  const calls = state.calls + (ask ? 2 : 1)
+  const calls = state.calls + (ask ? 3 : 1)
   const context: string[] = []
 
   if (decision.kind === "skill") {
@@ -103,16 +105,18 @@ async function userPromptSubmit(input: HookInput): Promise<void> {
   } else {
     writeState(sessionID, { at: Date.now(), calls, messages })
   }
-  // The tier decision is only needed to pick a subagent model, or once per session as a start-up hint.
+  const plan = resolvePlan(tier)
   const firstPrompt = messages === 1
-  const tier = ask && (agent || firstPrompt) ? await selectTier(ask, input.prompt ?? "") : null
-  if (agent) context.push(agentHint(agent, modelFor("claude", subagentTier(tier?.tier ?? "standard", agent.id)) ?? "sonnet"))
+  // Light work goes to the cheap worker; anything else that Jev wants delegated goes to a Claude subagent
+  // (Explore keeps its own small model, the rest follow the standard tier's model).
+  if (tier && plan.tier === "light") context.push(lightHint())
+  else if (agent) context.push(agentHint(agent, agent.id === "Explore" ? undefined : plan.harness === "claude" ? plan.model : undefined))
   const out: Record<string, unknown> = {}
   if (context.length > 0) out.hookSpecificOutput = { hookEventName: "UserPromptSubmit", additionalContext: context.join("\n\n") }
-  // Shown to you, not the model. Once per session, and only when the pick differs from the usual default:
-  // switching models mid-session throws away the prompt cache, so decide at the start and keep it.
-  if (firstPrompt && tier && tier.tier !== "standard") {
-    out.systemMessage = `jev-for-all: this session looks ${tier.tier}; ${modelFor("claude", tier.tier)} would fit (set it at the start with /model, then keep it).`
+  // Shown to you, not the model, once per session. The session model cannot change from a hook; this only
+  // tells you what `jev-for-all start` would have chosen.
+  if (firstPrompt && tier && plan.tier !== "standard") {
+    out.systemMessage = `jev-for-all: this looks ${plan.tier}; \`jev-for-all start\` would run it on ${plan.model} (${plan.effort}).`
   }
   if (Object.keys(out).length > 0) emit(out)
 
@@ -190,7 +194,9 @@ async function main(): Promise<void> {
   } catch {
     return
   }
-  if (input.hook_event_name === "UserPromptSubmit") await userPromptSubmit(input)
+  // First session after install: create ~/.config/jev-for-all/{config,models}.json if they are missing.
+  if (input.hook_event_name === "SessionStart") ensureConfig()
+  else if (input.hook_event_name === "UserPromptSubmit") await userPromptSubmit(input)
   else if (input.hook_event_name === "PreToolUse") preToolUse(input)
   else if (input.hook_event_name === "Stop") await stop(input)
 }

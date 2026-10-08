@@ -8,11 +8,18 @@
         "--with",
         "mcp",
         "python",
-        "${CLAUDE_PLUGIN_ROOT}/../browser-mcp/server.py"
+        "${CLAUDE_PLUGIN_ROOT}/browser-mcp/server.py"
       ],
       "env": {
         "BROWSER_MCP_JEV_DIR": "~/jev-ultrafast"
       }
+    },
+    "jev-delegate": {
+      "command": "bun",
+      "args": [
+        "run",
+        "${CLAUDE_PLUGIN_ROOT}/dist/delegate.js"
+      ]
     }
   }
 }

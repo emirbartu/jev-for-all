@@ -58,8 +58,10 @@ const rows = (): any[] => (existsSync(out) ? readFileSync(out, "utf8").trim().sp
 
 function runOne(task: Task, spec: string) {
   // "haiku+lean" = haiku with skills and MCP servers disabled (what the launcher does for light, no-external tasks).
-  const [model, lean] = spec.split("+")
-  const leanArgs = lean ? policy.models.leanArgs.claude! : []
+  // "sonnet@low" pins the thinking effort (claude --effort).
+  const [head, lean] = spec.split("+")
+  const [model, effort] = head!.split("@")
+  const leanArgs = [...(lean ? policy.models.leanArgs.claude! : []), ...(effort ? ["--effort", effort] : [])]
   const dir = mkdtempSync(join(tmpdir(), `bench-${task.id}-`))
   for (const [f, c] of Object.entries(task.files)) writeFileSync(join(dir, f), c)
   const started = Date.now()
@@ -85,7 +87,7 @@ if (cmd === "run") {
   const ask = createJev({ apiKey: process.env.OPENROUTER_API_KEY!, timeoutMs: 5000 })
   const data = rows()
   const cell = (task: string, model: string) => data.find((r) => r.task === task && r.model === model)
-  const tierModel: Record<Tier, string> = policy.models.catalog.claude
+  const tierModel: Record<Tier, string> = { light: "haiku", standard: "sonnet", heavy: "sonnet" }
   const total = { sonnet: { cost: 0, pass: 0, ms: 0 }, routed: { cost: 0, pass: 0, ms: 0 }, haiku: { cost: 0, pass: 0, ms: 0 } }
   console.log("task            labelled  jev-tier  routed→   sonnet(pass,$)     routed(pass,$)")
   for (const task of tasks) {

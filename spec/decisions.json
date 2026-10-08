@@ -55,53 +55,52 @@
     "builtin": [
       {
         "id": "Explore",
-        "maxTier": "light",
         "description": "Read-only search across many files or directories; returns conclusions, not file dumps"
       },
       {
         "id": "Plan",
-        "maxTier": "standard",
         "description": "Designs an implementation plan and weighs architecture trade-offs"
       },
       {
         "id": "general-purpose",
-        "maxTier": "standard",
         "description": "Researches open questions and runs multi-step tasks independently"
       }
     ],
-    "subagentMaxTier": "standard",
-    "hint": "<system_one_agents>\nDelegate this request to the {{id}} subagent via the Agent tool with model: \"{{model}}\", the cheapest model that fits, instead of working it in the main conversation.\n</system_one_agents>"
+    "hint": "<system_one_agents>\nDelegate this request to the {{id}} subagent via the Agent tool with model: \"{{model}}\" instead of working it in the main conversation.\n</system_one_agents>",
+    "hintDefault": "<system_one_agents>\nDelegate this request to the {{id}} subagent via the Agent tool, with no model override, instead of working it in the main conversation.\n</system_one_agents>",
+    "hintLight": "<system_one_agents>\nThis is cheap, mechanical work. Hand it to the jev_delegate_light tool (it runs on a low-cost model with maximum thinking) instead of doing it yourself, then check its result.\n</system_one_agents>"
   },
   "models": {
     "tiers": ["light", "standard", "heavy"],
     "fallback": "standard",
     "lightMin": 0.6,
     "heavyMin": 0.5,
-    "ids": { "tier": "tier", "external": "external" },
+    "ids": { "tier": "tier", "external": "external", "effort": "effort" },
     "lean": { "externalMax": 0.2 },
+    "effort": { "levels": ["low", "medium", "high", "xhigh"], "fallback": "medium", "minProbability": 0.5 },
     "questions": {
       "tier": "How demanding is this coding request for the AI model that has to carry it out?",
-      "external": "Does this request need an external service, a browser, a database, or a third-party API, beyond the project's own files and the shell?"
+      "external": "Does this request need an external service, a browser, a database, or a third-party API, beyond the project's own files and the shell?",
+      "effort": "How much careful step-by-step reasoning does this coding request need before the AI model acts?"
     },
     "criteria": {
-      "light": "light: a small, well-specified, mechanical step or a short factual question, such as a rename, a one-line edit, reading a file, running one command, or a quick explanation",
+      "light": "light: low-stakes work where spending many tokens does not matter and deep reasoning is not needed, at any size: mechanical or repetitive changes such as fixing lint or type errors, renames, formatting, comments or boilerplate across a whole codebase, simple lookups, and short factual questions",
       "standard": "standard: ordinary coding work with a clear goal, such as implementing a small feature, fixing a bug in one place, writing tests, or explaining how some code works",
-      "heavy": "heavy: hard work that needs deep reasoning, such as designing an architecture, hunting a subtle or cross-cutting bug, a large refactor, security-sensitive changes, or vague requirements that need judgment"
+      "heavy": "heavy: hard work where mistakes are costly and deep reasoning is needed, such as designing an architecture, hunting a subtle or cross-cutting bug, a large refactor, security-sensitive changes, or vague requirements that need judgment"
     },
-    "catalog": {
-      "claude": { "light": "haiku", "standard": "sonnet", "heavy": "opus" },
-      "opencode": {
-        "light": "opencode-go/deepseek-v4-flash",
-        "standard": "opencode-go/kimi-k2.7-code",
-        "heavy": "opencode-go/glm-5.3"
-      }
+    "effortCriteria": {
+      "low": "low: a quick answer or an obvious edit that needs almost no reasoning",
+      "medium": "medium: ordinary work where a little planning helps",
+      "high": "high: tricky logic, several interacting parts, or edge cases that must be thought through",
+      "xhigh": "xhigh: a very hard problem that needs long, careful reasoning"
+    },
+    "tierConfig": {
+      "light": { "harness": "opencode", "model": "opencode-go/deepseek-v4.1-flash", "effort": "max" },
+      "standard": { "harness": "claude", "model": "sonnet", "effort": "auto" },
+      "heavy": { "harness": "claude", "model": "sonnet", "effort": "auto", "minEffort": "high" }
     },
     "leanArgs": {
       "claude": ["--disable-slash-commands", "--strict-mcp-config", "--mcp-config", "{\"mcpServers\":{}}"]
-    },
-    "launch": {
-      "claude": ["claude", "--model", "{model}"],
-      "opencode": ["opencode", "--model", "{model}", "--prompt", "{prompt}"]
     }
   },
   "control": {

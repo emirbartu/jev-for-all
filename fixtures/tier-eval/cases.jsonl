@@ -46,3 +46,13 @@
 {"id": "heavy-10", "request": "Figure out why the CI is flaky: tests pass locally, fail 1 in 8 times on CI, and the failures are in unrelated files", "expected": "heavy"}
 {"id": "heavy-11", "request": "Build a plugin system for this CLI with sandboxed execution, versioned APIs, and backward compatibility guarantees", "expected": "heavy"}
 {"id": "heavy-12", "request": "Optimize the query planner: this report takes 40 seconds and touches 6 tables with several subqueries; propose and validate an approach", "expected": "heavy"}
+{"id": "light-bulk-1", "request": "Fix all the eslint errors across the whole codebase", "expected": "light"}
+{"id": "light-bulk-2", "request": "Format every file in the repo with prettier", "expected": "light"}
+{"id": "light-bulk-3", "request": "Add JSDoc comments to all exported functions in src/", "expected": "light"}
+{"id": "light-bulk-4", "request": "Rename all snake_case variables to camelCase across the project", "expected": "light"}
+{"id": "light-bulk-5", "request": "Update the import paths everywhere after I moved utils/ to lib/", "expected": "light"}
+{"id": "light-bulk-6", "request": "Add the missing type annotations across the project to silence the TypeScript warnings", "expected": "light"}
+{"id": "light-bulk-7", "request": "Remove all the console.log statements from the codebase", "expected": "light"}
+{"id": "light-bulk-8", "request": "Convert every var to const or let in the repo", "expected": "light"}
+{"id": "light-bulk-9", "request": "Fix all the spelling mistakes in the docs folder", "expected": "light"}
+{"id": "light-bulk-10", "request": "Add a license header to every source file", "expected": "light"}

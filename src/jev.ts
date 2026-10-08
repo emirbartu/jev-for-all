@@ -1,4 +1,6 @@
 import { OpenRouter } from "@openrouter/sdk"
+import { loadConfig } from "./config"
+export { type ChoiceAnswer, type NoulAnswer, asChoice, asNoul } from "./answers"
 
 export interface QuestionChoice {
   type: "choice"
@@ -39,12 +41,12 @@ export class JevError extends Error {
 // server is a drop-in backend: set LAYA_BASE_URL (and LAYA_API_KEY if the server has one). It wins over
 // OpenRouter when set, and never falls back to it: a down local server fails open instead of spending credits.
 export function layaURL(): string | undefined {
-  return process.env.LAYA_BASE_URL?.replace(/\/+$/, "") || undefined
+  return (process.env.LAYA_BASE_URL || loadConfig().layaUrl)?.replace(/\/+$/, "") || undefined
 }
 
 // The key every host needs before it enables routing. Laya needs no OpenRouter key, so a placeholder stands in.
 export function resolveKey(explicit?: string): string | undefined {
-  return layaURL() ? (explicit ?? "laya") : (explicit ?? process.env.OPENROUTER_API_KEY)
+  return layaURL() ? (explicit ?? "laya") : (explicit ?? process.env.OPENROUTER_API_KEY ?? loadConfig().apiKey)
 }
 
 async function askLaya(base: string, options: JevOptions, state: unknown, questions: Record<string, Question>): Promise<Answers> {
@@ -110,38 +112,4 @@ export function createJev(options: JevOptions): Ask {
     })
     return answers as Answers
   }
-}
-
-export interface ChoiceAnswer {
-  choice: string
-  probabilities: Record<string, number>
-  confidence?: number
-}
-
-export interface NoulAnswer {
-  noul: number
-}
-
-export function asChoice(value: unknown): ChoiceAnswer | null {
-  if (!value || typeof value !== "object") return null
-  const candidate = value as { type?: unknown; choice?: unknown; probabilities?: unknown; confidence?: unknown }
-  if (candidate.type !== "choice" || typeof candidate.choice !== "string") return null
-  const probabilities: Record<string, number> = {}
-  if (candidate.probabilities && typeof candidate.probabilities === "object") {
-    for (const [key, probability] of Object.entries(candidate.probabilities as Record<string, unknown>)) {
-      if (typeof probability === "number" && Number.isFinite(probability)) probabilities[key] = probability
-    }
-  }
-  return {
-    choice: candidate.choice,
-    probabilities,
-    confidence: typeof candidate.confidence === "number" ? candidate.confidence : undefined,
-  }
-}
-
-export function asNoul(value: unknown): NoulAnswer | null {
-  if (!value || typeof value !== "object") return null
-  const candidate = value as { type?: unknown; noul?: unknown }
-  if (candidate.type !== "noul" || typeof candidate.noul !== "number" || !Number.isFinite(candidate.noul)) return null
-  return { noul: candidate.noul }
 }

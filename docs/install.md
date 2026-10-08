@@ -1,42 +1,50 @@
 # Install jev-for-all (for agents)
 
-One command registers the OpenCode plugin in the user's config:
+Run these, in order. Every step is idempotent.
 
 ```bash
-bunx jev-for-all install
+bunx jev-for-all init --key <OPENROUTER_KEY>     # or: npx jev-for-all init
+bunx jev-for-all doctor
 ```
 
-Or use the native manager: `opencode plugin add jev-for-all` writes `"plugins": ["jev-for-all"]`.
-It cannot add `options`, so set `OPENROUTER_API_KEY`.
+Requirements: [bun](https://bun.sh) on `PATH`. Claude Code and OpenCode are each optional; `init` skips
+the one that is not installed.
 
-- The installer writes this entry into `~/.config/opencode/opencode.jsonc` (or
-  `$XDG_CONFIG_HOME/opencode/opencode.jsonc`), inserting it first in the `"plugins"` array:
+## What `init` does
 
-  ```jsonc
-  {
-    "plugins": [
-      { "package": "jev-for-all", "options": { "apiKey": "sk-or-..." } }
-    ]
-  }
-  ```
+1. Creates `~/.config/jev-for-all/` (or `$XDG_CONFIG_HOME/jev-for-all/`) with two files, only if missing:
+   - `config.json`: `{ "apiKey": "", "layaUrl": "" }`, mode 0600. `--key` fills `apiKey`, `--laya <url>`
+     fills `layaUrl`. A key already exported as `OPENROUTER_API_KEY` is used without storing it.
+   - `models.json`: the three tiers (`light`, `standard`, `heavy`), each `{ harness, model, effort }`.
+     This is the example config; edit it to change models or thinking levels.
+2. OpenCode: inserts `{ "package": "jev-for-all" }` first in the `"plugins"` array of
+   `~/.config/opencode/opencode.jsonc` (never touches anything else; refuses an invalid file).
+3. Claude Code: `claude plugin marketplace add emirbartu/jev-for-all`, then
+   `claude plugin install system-one@jev-for-all`. Use `--claude-source <checkout>` for a local clone.
+4. Prints a warning if `opencode auth list` shows no OpenCode Go login (`opencode auth login` fixes it).
 
-- It is idempotent. An existing `jev-for-all` entry (npm name or a clone path ending in
-  `/jev-for-all`) is left alone.
-- Flags: `--config <path>` targets another config file; `--key <sk-or-...>` skips the prompt;
-  `--dry-run` prints the edited text without writing.
-- No key yet? Either export `OPENROUTER_API_KEY`, or add `options.apiKey` to the entry later.
-- The installer never touches anything else in the file, and refuses to write if the config is
-  not valid JSONC.
+Flags: `--no-claude`, `--no-opencode`, `--dry-run`, `--config <opencode config path>`.
 
 ## Verify
 
-1. Restart OpenCode.
-2. `opencode plugin list` shows `jev-for-all`.
-3. The plugin loads with the session. With `"debug": true` in the options, routing decisions log
-   to the console.
-4. `bunx jev-for-all install` again prints `already installed, nothing to do`.
+`bunx jev-for-all doctor` prints one line per check (bun, both config files, backend, a live decision,
+the Claude Code plugin, the OpenCode Go login) and exits non-zero if something is wrong.
+`doctor --deep` also sends a few tokens to DeepSeek to prove the OpenCode Go credential works.
+Restart Claude Code and OpenCode after the first install.
+
+## Use
+
+```bash
+jev-for-all start "fix all the eslint errors across the codebase"   # picks harness, model and effort once
+jev-for-all pick  "<prompt>"                                         # print the decision only
+```
 
 ## Uninstall
 
-Remove the `jev-for-all` entry from the `"plugins"` array and restart OpenCode. If it was added
-with the native manager, `opencode plugin remove jev-for-all` does the same.
+```bash
+claude plugin uninstall system-one@jev-for-all
+claude plugin marketplace remove jev-for-all
+```
+
+Remove the `jev-for-all` entry from the OpenCode `"plugins"` array, and delete
+`~/.config/jev-for-all/` if you want the config gone too.

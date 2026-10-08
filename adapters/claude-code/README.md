@@ -14,34 +14,28 @@ the OpenCode adapter does for tool routing.
 
 ## Install
 
-Requires `bun` on PATH: the hooks are TypeScript files and Claude Code runs them with
-`bun run`.
+From anywhere: `bunx jev-for-all init` (see the main README), or inside Claude Code:
 
-Per invocation, nothing is written to your Claude Code configuration:
-
-```bash
-claude --plugin-dir /home/gerius/Desktop/jev-for-all/adapters/claude-code
+```text
+/plugin marketplace add emirbartu/jev-for-all
+/plugin install system-one@jev-for-all
 ```
 
-`claude plugin install` has no local-path mode: it resolves plugins through marketplaces
-only, so the repo ships one at `adapters/claude-code/marketplace`. To install the plugin
-permanently from this machine:
+Requires `bun` on PATH. Claude Code copies a plugin into its cache, so everything the plugin runs is
+self-contained: `dist/system-one.js` (the hook) and `dist/delegate.js` (the MCP tool) are bundles with
+the spec embedded, and `browser-mcp/` is a copy of `adapters/browser-mcp`. **After changing anything
+under `src/`, `spec/`, `hooks/`, `mcp/` or `adapters/browser-mcp`, run `bun run build` and commit
+`dist/` and `browser-mcp/`.** The first session creates `~/.config/jev-for-all/{config,models}.json`
+if they are missing.
 
-```bash
-claude plugin marketplace add /home/gerius/Desktop/jev-for-all/adapters/claude-code/marketplace
-claude plugin install system-one@jev-local
-```
-
-`marketplace/system-one` is a symlink to the adapter directory, which is how the marketplace
-points at the plugin without copying it. `claude plugin validate
-/home/gerius/Desktop/jev-for-all/adapters/claude-code` passes, and `claude plugin details
-system-one@jev-local` lists all three hooks, the `browser-task` skill, and the MCP server.
+Developing from a checkout: `claude --plugin-dir adapters/claude-code` for one run, or
+`claude plugin marketplace add <checkout>` then `claude plugin install system-one@jev-for-all`.
 
 ## Environment
 
 | Variable | Meaning |
 | --- | --- |
-| `OPENROUTER_API_KEY` | Required. Without it the hook stays inert (exits 0, no output). |
+| `OPENROUTER_API_KEY` | Backend key; or set `apiKey` in `~/.config/jev-for-all/config.json`. Without either (and no Laya URL) the hook stays inert. |
 | `SYSTEM_ONE_SERVER_URL` | Optional. Override the decisions endpoint (proxies). |
 | `SYSTEM_ONE_SKILL_DIRS` | Optional. Colon-separated skill directories; replaces the default roster source. |
 | `SYSTEM_ONE_STATE_DIR` | Optional. Per-session state and decision log directory. |

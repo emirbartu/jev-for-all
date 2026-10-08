@@ -1,6 +1,6 @@
 {
   "name": "jev-for-all",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "license": "MIT",
   "description": "An OpenCode plugin that routes skill and tool choices through Jev, TypeSafe's System One decision model.",
   "repository": "github:emirbartu/jev-for-all",
@@ -19,7 +19,8 @@
     "bin"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "bun scripts/build-claude-plugin.ts"
   },
   "dependencies": {
     "@opencode/plugin": "^2.0.8",

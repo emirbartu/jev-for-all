@@ -14,35 +14,57 @@ typed answers with a calibrated confidence for each. The repo connects it to Ope
 Code, Hermes and pi (senpi) through one shared decision contract, so every harness gets the same
 answers.
 
-## Quick start (OpenCode)
+## Install
 
 ```bash
-bunx jev-for-all install
+bunx jev-for-all init        # or: npx jev-for-all init
+jev-for-all doctor           # checks every piece and says how to fix what is wrong
 ```
 
-The installer writes the plugin block into your OpenCode config and asks for your OpenRouter key
-([create one](https://openrouter.ai/keys)). It is idempotent and leaves the rest of the file
-alone. Restart OpenCode and routing is on for every session.
+`init` is safe to re-run. It needs [bun](https://bun.sh) (the Claude Code hook, the MCP tool and the
+launcher run on it) and does four things:
 
-V2 also has a native manager. `opencode plugin add jev-for-all` writes a plain
-`"plugins": ["jev-for-all"]` entry; it cannot add `options`, so set `OPENROUTER_API_KEY` instead
-of `apiKey`.
+1. Creates **`~/.config/jev-for-all/config.json`** (backend: your OpenRouter key or a Laya URL, mode 0600)
+   and **`~/.config/jev-for-all/models.json`** (one entry per tier, see below). Existing files are never
+   overwritten. The Claude Code plugin also creates them on its first session if they are missing.
+2. Registers the OpenCode plugin in your OpenCode config (no secret is copied into it).
+3. Installs the Claude Code plugin from this repo's marketplace.
+4. Warns if the OpenCode Go login is missing, because the light tier runs on it.
 
-Or edit the config yourself:
+Pass `--key sk-or-...` (or enter it when asked) to store the key. An exported `OPENROUTER_API_KEY` works
+without storing anything. Other flags: `--laya <url>`, `--no-claude`, `--no-opencode`, `--dry-run`.
+
+Do it by hand instead:
+
+```text
+/plugin marketplace add emirbartu/jev-for-all        # inside Claude Code
+/plugin install system-one@jev-for-all
+```
 
 ```jsonc
 // ~/.config/opencode/opencode.jsonc
-{
-  "plugins": [
-    { "package": "jev-for-all", "options": { "apiKey": "sk-or-..." } }
-  ]
-}
+{ "plugins": [ { "package": "jev-for-all" } ] }
 ```
-
-A local clone path works too when you develop the plugin.
 
 Let your agent install it: point it at
 <https://raw.githubusercontent.com/emirbartu/jev-for-all/main/docs/install.md>.
+
+### Configuration
+
+`~/.config/jev-for-all/models.json` is created with the defaults, so it doubles as the example:
+
+```jsonc
+{
+  "light":    { "harness": "opencode", "model": "opencode-go/deepseek-v4.1-flash", "effort": "max" },
+  "standard": { "harness": "claude",   "model": "sonnet", "effort": "auto" },
+  "heavy":    { "harness": "claude",   "model": "sonnet", "effort": "auto", "minEffort": "high" }
+}
+```
+
+`effort` is `low`, `medium`, `high`, `xhigh` or `max`, or `auto` to let Jev choose per request.
+`harness` is `claude` (model alias or id, run with `--effort`) or `opencode` (`provider/model`, run with
+`#variant`). Delete the file to get the defaults back. Plugin options for the OpenCode side are in
+[Full configuration](#full-configuration).
 
 ## Results
 
@@ -65,30 +87,45 @@ Let your agent install it: point it at
 - Every operation inside `browser_task`: given a goal, Jev picks each click, target and typed
   value.
 
-## Pick the model, not just the skill
+## Pick the model and thinking level, not just the skill
 
-Built for people who split work across cheap subscriptions (a $20 Claude plan, OpenCode Go). Jev
-decides once, at the start, which model a session needs, then stays out of the way. Switching models
-inside a session throws away the prompt cache and the agent's context, so it never does that.
+Built for people who split work across cheap subscriptions (a $20 Claude plan plus OpenCode Go).
+Three tiers, each a harness, a model and a thinking effort (`tierConfig` in `spec/decisions.json`):
+
+| Tier | For | Default | Thinking |
+| --- | --- | --- | --- |
+| `light` | low-stakes work where burning tokens does not matter: lint or type errors across a codebase, renames, formatting, boilerplate, short questions | OpenCode Go `deepseek-v4.1-flash` | always `max` |
+| `standard` | everything else, and anything Jev is unsure about | Claude `sonnet` | Jev picks `low`, `medium`, `high` or `xhigh` (`medium` when unsure) |
+| `heavy` | the hardest work: architecture, subtle cross-cutting bugs, large refactors | Claude `sonnet` (same as standard for now) | Jev picks, never below `high` |
 
 ```bash
-jev-for-all claude   "rename x to count in utils.js"   # light  -> haiku, lean session
-jev-for-all opencode "design the sync architecture"    # heavy  -> your heavy OpenCode model
-jev-for-all pick     "<prompt>"                        # just print the decision as JSON
-jev-for-all opencode-agents                            # per-tier subagents for opencode.json
+jev-for-all start "fix all the eslint errors across the codebase"   # light -> opencode on deepseek, max
+jev-for-all start "add input validation to createOrder"             # standard -> claude --model sonnet --effort medium
+jev-for-all pick  "<prompt>"                                        # print the decision and command only
 ```
 
-- **Tiers.** One Jev choice labels the first prompt `light`, `standard` or `heavy`. Asymmetric on
-  purpose: a hard task on a weak model costs quality, an easy task on a strong model only costs money,
-  so `light` needs 0.6 and `heavy` 0.5 probability and anything unclear becomes `standard`.
-- **Your models.** Defaults are in `spec/decisions.json`; override any tier in
-  `~/.config/jev-for-all/models.json`, e.g. `{ "claude": { "standard": "haiku" } }`.
-- **Lean sessions.** For a light task that needs no external service, the launcher starts Claude Code
-  with skills and MCP servers off. Restart without it if you change your mind.
-- **Subagents.** The Claude Code hook tells the main agent to delegate with a `model` chosen by tier,
-  capped at `standard` (and `light` for `Explore`, which only gathers). In OpenCode, the printed
-  `agent` block pins one subagent per tier to your catalog.
-- **Fails open.** No key, timeout or unclear answer: the harness starts with your own default.
+`start` decides once, from the first prompt, and never switches mid-session (a model change throws away
+the prompt cache and the agent's context). One Jev call returns the tier, the effort and whether the
+task needs an external service; if it does not and the task is light, a Claude session starts lean
+(skills and MCP off). Change any tier in `~/.config/jev-for-all/models.json`, for example
+`{ "heavy": { "model": "opus" }, "light": { "model": "opencode-go/glm-5.3" } }`.
+
+### The orchestrator and its workers
+
+The model at the top is whatever you started: Claude Code on Sonnet (or OpenCode). It stays in charge
+and delegates:
+
+- **Light work to the cheap worker.** The Claude Code plugin ships an MCP tool, `jev_delegate_light`,
+  that runs `opencode run --model opencode-go/deepseek-v4.1-flash#max "<task>"` in your project and
+  returns the report plus `git status`. The hook adds a one-line hint when Jev judges a prompt light.
+  This spends your flat OpenCode Go allowance instead of Claude quota.
+- **Broad searches and parallel work to Claude subagents,** with a `model` chosen for them (the
+  built-in `Explore` keeps its own small model).
+- **OpenCode as the orchestrator:** `jev-for-all opencode-agents` prints a `jev-light` subagent pinned
+  to the light model (the `variant` field is unverified against OpenCode's agent schema).
+
+Needs a working OpenCode Go login: if `opencode auth list` shows it but runs say "Invalid
+credential", run `opencode auth login` again.
 
 ### What it measured
 
@@ -103,9 +140,11 @@ reference solution passes, run through headless Claude Code with every plugin of
 | always Haiku | 12 / 12 | $0.062 (-94%) | 99k |
 | Haiku, lean session | 12 / 12 | $0.037 | 63k (-37%) |
 
+Thinking effort barely moves the bill: Sonnet on the same 12 tasks passed 12/12 at both `low` and `high`, and `high` cost 9% more, used 45% more output tokens and took 1.75 times as long, because the roughly 70k tokens of context dominate. Letting Jev choose the effort is a small saving, not a large one.
+
 Read it carefully. These are single-file tasks, so Haiku solving all of them says little about large
 multi-file work, and one run per cell is noisy (Sonnet's one failure, `lru-ttl`, is likely luck).
-Tier labels matched my own on 46 of 48 prompts, but I wrote both. The default catalog is deliberately
+Tier labels matched mine on 56 of 58 prompts, but I wrote both, and I tuned the `light` wording on ten of those cases. The default catalog is deliberately
 conservative (`standard` stays on Sonnet); if your tasks look like the benchmark, put Haiku on
 `standard` and keep the 94%. The lean saving is the firmest result: skills and MCP schemas were about
 40% of the input for a one-line edit, and it holds on any model.

@@ -1,5 +1,4 @@
-import { readFileSync } from "node:fs"
-import { join } from "node:path"
+import spec from "../spec/decisions.json"
 
 export interface SkillPolicy {
   gateThreshold: number
@@ -102,25 +101,37 @@ export interface AgentPolicy {
   none: string
   noneLabel: string
   questions: { delegate: string; pick: string }
-  builtin: Array<{ id: string; description: string; maxTier?: Tier }>
-  subagentMaxTier: Tier
+  builtin: Array<{ id: string; description: string }>
   hint: string
+  hintDefault: string
+  hintLight: string
 }
 
 export type Tier = "light" | "standard" | "heavy"
+
+export type Effort = "low" | "medium" | "high" | "xhigh" | "max"
+
+// One tier = which harness runs it, which model, and how hard it thinks. effort "auto" means Jev picks.
+export interface TierConfig {
+  harness: "claude" | "opencode"
+  model: string
+  effort: Effort | "auto"
+  minEffort?: Effort
+}
 
 export interface ModelPolicy {
   tiers: Tier[]
   fallback: Tier
   lightMin: number
   heavyMin: number
-  ids: { tier: string; external: string }
+  ids: { tier: string; external: string; effort: string }
   lean: { externalMax: number }
-  questions: { tier: string; external: string }
-  leanArgs: Record<string, string[]>
+  effort: { levels: Effort[]; fallback: Effort; minProbability: number }
+  questions: { tier: string; external: string; effort: string }
   criteria: Record<Tier, string>
-  catalog: Record<string, Record<Tier, string>>
-  launch: Record<string, string[]>
+  effortCriteria: Record<string, string>
+  tierConfig: Record<Tier, TierConfig>
+  leanArgs: Record<string, string[]>
 }
 
 export interface Policy {
@@ -133,11 +144,8 @@ export interface Policy {
   spend: SpendPolicy
 }
 
-// Read at module load, next to this file. The plugin is installed as a directory,
-// so `spec/` travels with it; a missing contract is a broken install and should fail loudly.
-const specPath = join(import.meta.dir, "..", "spec", "decisions.json")
-
-export const policy: Policy = JSON.parse(readFileSync(specPath, "utf8"))
+// Imported, not read from disk, so the code can be bundled into a self-contained plugin file.
+export const policy = spec as unknown as Policy
 
 export function formatTemplate(template: string, values: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (match, key: string) => values[key] ?? match)

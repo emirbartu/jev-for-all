@@ -74,6 +74,7 @@ tool-result bodies is not an option today.
 | Command | Notes |
 | --- | --- |
 | `bun run typecheck` | `tsc --noEmit`, strict. There is no build step; OpenCode runs `index.ts` with Bun. |
+| `bun run build` | Rebuilds `adapters/claude-code/dist/*` (self-contained bundles) and copies `browser-mcp/`. Commit the result: Claude Code runs the plugin from its cache, where `../../../src` does not exist. |
 | `bun scripts/conformance.ts` | Shared 9-case conformance against the TS core and the Claude Code adapter. |
 | `OPENROUTER_API_KEY=... bun scripts/jev-probe.ts decisions` | Live Jev smoke test (noul and choice). |
 | `OPENROUTER_API_KEY=... bun scripts/jev-probe.ts catalog tools.json [task]` | Live tool-routing probe against a tool catalog. |
@@ -101,8 +102,9 @@ push `main`. npm package `jev-for-all`; npm user `emirb42`.
 | `src/jev.ts` | Transport plus runtime guards `asChoice` and `asNoul`. |
 | `src/skills.ts` | Gate (3 nouls + `gate::mechanical` veto) -> rank (choice) -> optional rerank (shortlist plus `fits::<id>` nouls) -> `{ id }` or `null`. |
 | `src/agents.ts` | `selectAgent`: `delegate` noul plus a choice over subagents with a `none` option (used by the Claude Code adapter). |
-| `src/models.ts` | `selectTier` (one Jev choice: light, standard, heavy; asymmetric thresholds, falls back to standard) and the user-editable tier-to-model catalog. |
-| `bin/pick.ts` | Session-start launcher: picks one model for the whole session and starts `claude` or `opencode` with it. Also prints per-tier OpenCode subagents. |
+| `src/models.ts` | `selectTier` (one Jev call: tier choice, effort choice, external-service noul; asymmetric tier thresholds, falls back to standard/medium), `resolvePlan`, and the per-tier `tierConfig` (user-editable). |
+| `bin/pick.ts` | `start`/`pick`: asks Jev for tier + effort once, then launches the tier's harness (`claude --model --effort` or `opencode --model provider/model#variant`). Also prints the OpenCode `jev-light` subagent. |
+| `adapters/claude-code/mcp/delegate.ts` | MCP stdio server with `jev_delegate_light`: runs `opencode run` on the light tier's model. Hand-rolled JSON-RPC, no SDK. |
 | `src/tools.ts` | `renderState`, `routeTools`, `applyToolDecision`. |
 | `src/observe.ts` | Usage JSONL recorder, parse, summarize and report helpers. |
 | `src/browser.ts` plus `src/jev-runner.py` | The `browser_task` tool: builds the `uv run` command, parses one `JEV_RESULT` JSON line, fails open. The Python side runs one Jev Ultrafast goal and prints that line; it never raises. |
@@ -110,6 +112,7 @@ push `main`. npm package `jev-for-all`; npm user `emirb42`.
 | `fixtures/conformance.jsonl` plus `scripts/conformance.ts` | The shared 9-case corpus and the TS conformance runner. |
 | `adapters/` | Claude Code, pi-senpi and Hermes adapters plus the browser-mcp server, each with its own assets and README. |
 | `scripts/` | Live probes, headless eval, eval fixtures. |
+| `src/config.ts` | `~/.config/jev-for-all/{config,models}.json`: `ensureConfig` creates them if missing (installer, `SessionStart` hook), `loadConfig` reads the key and Laya URL. `bin/jev-for-all.js` mirrors the creation in plain JS. |
 | `docs/install.md` | Install instructions for agents. |
 
 ## Wiring facts an agent cannot infer from a file read

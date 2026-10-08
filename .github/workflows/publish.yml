@@ -19,10 +19,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2 # the bundles in adapters/claude-code/dist are built with this; bump both together
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bun scripts/conformance.ts
       - run: bun scripts/sync-adapter-assets.ts --check
+      - name: Smoke-test the self-contained Claude Code plugin
+        run: |
+          bun run build
+          copy=$(mktemp -d); cp -r adapters/claude-code/. "$copy"
+          export XDG_CONFIG_HOME=$(mktemp -d)
+          echo '{"hook_event_name":"SessionStart"}' | bun run "$copy/dist/system-one.js"
+          test -f "$XDG_CONFIG_HOME/jev-for-all/models.json" && test -f "$XDG_CONFIG_HOME/jev-for-all/config.json"
+          echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | bun run "$copy/dist/delegate.js" | grep -q jev_delegate_light
+          git diff --exit-code -- adapters/claude-code/dist adapters/claude-code/browser-mcp || { echo "dist is stale: run 'bun run build' and commit"; exit 1; }
       - uses: actions/setup-node@v4
         with:
           node-version: 24

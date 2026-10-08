@@ -39,6 +39,35 @@
       "chars": 8000
     }
   },
+  "agents": {
+    "delegateThreshold": 0.6,
+    "minConfidence": 0.4,
+    "ids": {
+      "pick": "agent",
+      "delegate": "delegate"
+    },
+    "none": "none",
+    "questions": {
+      "delegate": "Would this request be better handed to a subagent, because it needs broad searching or reading across many files, several independent parallel tasks, or an independent review, rather than a focused change the main agent can make directly?",
+      "pick": "Which subagent is the right one to hand this request to, or none if the main agent should handle it directly?"
+    },
+    "noneLabel": "none — the main agent handles this directly",
+    "builtin": [
+      {
+        "id": "Explore",
+        "description": "Read-only search across many files or directories; returns conclusions, not file dumps"
+      },
+      {
+        "id": "Plan",
+        "description": "Designs an implementation plan and weighs architecture trade-offs"
+      },
+      {
+        "id": "general-purpose",
+        "description": "Researches open questions and runs multi-step tasks independently"
+      }
+    ],
+    "hint": "<system_one_agents>\nDelegate this request to the {{id}} subagent via the Agent tool instead of exploring in the main conversation.\n</system_one_agents>"
+  },
   "control": {
     "verify": false,
     "claimMin": 0.5,

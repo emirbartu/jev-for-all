@@ -1,0 +1,36 @@
+name: publish
+
+# Every push to main runs the checks, then publishes to npm when package.json's version is new.
+# Auth is npm trusted publishing (OIDC): no token to store. Link it once with
+#   npm trust github jev-for-all --file publish.yml --repo emirbartu/jev-for-all -y
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun scripts/conformance.ts
+      - run: bun scripts/sync-adapter-assets.ts --check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Publish if this version is not on npm yet
+        run: |
+          name=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "$name@$version is already published, nothing to do"
+          else
+            npm publish --access public
+          fi

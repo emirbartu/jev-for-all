@@ -118,14 +118,15 @@ The model at the top is whatever you started: Claude Code on Sonnet (or OpenCode
 delegates cheap work to the light tier:
 
 - **Light on Claude (default).** `jev-for-all start` launches a stronger tier with a `jev-light` subagent
-  (`--agents`, built from `models.json`, so a config change applies at the next launch), and the hook adds a
+  (`--agents`, built from `models.json`, so a config change applies at the next launch), and, with hints on, the hook adds a
   one-line "use a subagent with `model: haiku`" hint when Jev judges a prompt light.
 - **Light on OpenCode.** Set `"light": { "harness": "opencode", "model": "opencode-go/..." }`. The plugin then
   advertises an MCP tool, `jev_delegate_light`, that runs `opencode run --model <model>#max "<task>"` in your
   project and returns the report plus `git status`; it advertises nothing when light is on Claude, so it costs
   no tokens then. Needs a working OpenCode Go login (`opencode auth login`; `jev-for-all doctor --deep` tests it).
-- **Broad searches and parallel work to Claude subagents,** with a `model` chosen for them (the built-in
-  `Explore` keeps its own small model).
+- **Broad searches and parallel work to Claude subagents** with a Jev-chosen `model`: this is the per-prompt
+  hint layer, **off by default** because Claude already delegates well on its own and the hints cost tokens in
+  our measurements. Turn it on with `"hints": true` in `config.json` or `SYSTEM_ONE_HINTS=1`.
 - **OpenCode as the orchestrator:** `jev-for-all opencode-agents` prints a `jev-light` subagent pinned to the
   light model when light is on OpenCode (the `variant` field is unverified against OpenCode's agent schema).
 

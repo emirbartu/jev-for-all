@@ -182,7 +182,7 @@ function configDir() {
 function loadConfig() {
   try {
     const raw = JSON.parse(readFileSync(join(configDir(), "config.json"), "utf8"));
-    return { apiKey: raw.apiKey?.trim() || undefined, layaUrl: raw.layaUrl?.trim() || undefined };
+    return { apiKey: raw.apiKey?.trim() || undefined, layaUrl: raw.layaUrl?.trim() || undefined, hints: raw.hints === true };
   } catch {
     return {};
   }
@@ -204,7 +204,7 @@ function ensureConfig(options = {}) {
       created.push(path);
     };
     write("models.json", { _help: MODELS_HELP, ...policy.models.tierConfig });
-    write("config.json", { apiKey: options.apiKey ?? "", layaUrl: options.layaUrl ?? "" }, 384);
+    write("config.json", { apiKey: options.apiKey ?? "", layaUrl: options.layaUrl ?? "", hints: false }, 384);
   } catch {}
   return created;
 }

@@ -43577,7 +43577,7 @@ function configDir() {
 function loadConfig() {
   try {
     const raw = JSON.parse(readFileSync(join(configDir(), "config.json"), "utf8"));
-    return { apiKey: raw.apiKey?.trim() || undefined, layaUrl: raw.layaUrl?.trim() || undefined };
+    return { apiKey: raw.apiKey?.trim() || undefined, layaUrl: raw.layaUrl?.trim() || undefined, hints: raw.hints === true };
   } catch {
     return {};
   }
@@ -43599,7 +43599,7 @@ function ensureConfig(options = {}) {
       created.push(path);
     };
     write("models.json", { _help: MODELS_HELP, ...policy.models.tierConfig });
-    write("config.json", { apiKey: options.apiKey ?? "", layaUrl: options.layaUrl ?? "" }, 384);
+    write("config.json", { apiKey: options.apiKey ?? "", layaUrl: options.layaUrl ?? "", hints: false }, 384);
   } catch {}
   return created;
 }
@@ -44218,6 +44218,13 @@ function verifyMessages(input) {
 // adapters/claude-code/hooks/system-one.ts
 var CAP = policy.spend.maxCallsPerSession;
 var WARN_AT = policy.spend.warnAt;
+function hintsEnabled() {
+  const env = process.env.SYSTEM_ONE_HINTS;
+  return env ? env === "1" || env === "true" : loadConfig().hints === true;
+}
+function startNote(plan) {
+  return `jev-for-all: this looks ${plan.tier}; \`jev-for-all start\` would run it on ${plan.model} (${plan.effort}).`;
+}
 function emit(value) {
   process.stdout.write(JSON.stringify(value) + `
 `);
@@ -44262,6 +44269,16 @@ async function userPromptSubmit(input) {
   if ((input.prompt ?? "").trimStart().startsWith("/")) {
     writeState(sessionID, { at: Date.now(), calls: state.calls, messages });
     logTurn(state.calls);
+    return;
+  }
+  if (!hintsEnabled()) {
+    writeState(sessionID, { at: Date.now(), calls: state.calls, messages });
+    const ask = messages === 1 ? newAsk(meta) : undefined;
+    const tier = ask ? await selectTier(ask, input.prompt ?? "") : null;
+    const plan = resolvePlan(tier);
+    if (tier && plan.tier !== "standard")
+      emit({ systemMessage: startNote(plan) });
+    logTurn(state.calls + (ask ? 1 : 0));
     return;
   }
   const skills = scanSkillDirs(skillDirs(input));
@@ -44309,9 +44326,8 @@ async function userPromptSubmit(input) {
     out.hookSpecificOutput = { hookEventName: "UserPromptSubmit", additionalContext: context.join(`
 
 `) };
-  if (firstPrompt && tier && plan.tier !== "standard") {
-    out.systemMessage = `jev-for-all: this looks ${plan.tier}; \`jev-for-all start\` would run it on ${plan.model} (${plan.effort}).`;
-  }
+  if (firstPrompt && tier && plan.tier !== "standard")
+    out.systemMessage = startNote(plan);
   if (Object.keys(out).length > 0)
     emit(out);
   logDecision({

@@ -278,7 +278,7 @@ export function ensureConfigFiles({ key, laya, dryRun = false } = {}) {
     result.created.push(modelsPath)
   }
   if (!existsSync(configPath)) {
-    if (!dryRun) writeFileSync(configPath, JSON.stringify({ apiKey: key ?? "", layaUrl: laya ?? "" }, null, 2) + "\n", { mode: 0o600 })
+    if (!dryRun) writeFileSync(configPath, JSON.stringify({ apiKey: key ?? "", layaUrl: laya ?? "", hints: false }, null, 2) + "\n", { mode: 0o600 })
     result.created.push(configPath)
   } else if (key || laya) {
     try {

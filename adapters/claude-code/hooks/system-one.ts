@@ -5,7 +5,7 @@ import { NONE_CONTEXT, decide, injectionFor } from "../lib/decide"
 import { agentHint, lightHint, selectAgent } from "../../../src/agents"
 import { resolvePlan, selectTier } from "../../../src/models"
 import { defaultAgentDirs, defaultSkillDirs, scanAgentDirs, scanSkillDirs } from "../lib/roster"
-import { ensureConfig } from "../../../src/config"
+import { ensureConfig, loadConfig } from "../../../src/config"
 import { readState, writeState, type SessionState } from "../lib/state"
 import { logDecision, logUsage } from "../lib/log"
 import { decideVerification, verifyEnabled, verifyMessages } from "../lib/verify"
@@ -25,6 +25,15 @@ interface HookInput {
 
 const CAP = policy.spend.maxCallsPerSession
 const WARN_AT = policy.spend.warnAt
+
+function hintsEnabled(): boolean {
+  const env = process.env.SYSTEM_ONE_HINTS
+  return env ? env === "1" || env === "true" : loadConfig().hints === true
+}
+
+function startNote(plan: { tier: string; model: string; effort: string }): string {
+  return `jev-for-all: this looks ${plan.tier}; \`jev-for-all start\` would run it on ${plan.model} (${plan.effort}).`
+}
 
 function emit(value: unknown): void {
   process.stdout.write(JSON.stringify(value) + "\n")
@@ -75,6 +84,18 @@ async function userPromptSubmit(input: HookInput): Promise<void> {
     logTurn(state.calls)
     return
   }
+  // Per-prompt skill and subagent hints are opt-in: Claude already picks skills and subagents itself, and in our
+  // measurements injecting hints cost tokens without a gain. Off, an ordinary prompt gets no Jev call, no
+  // injected text and no tool denial. Only the first prompt gets a note, shown to you and never to the model.
+  if (!hintsEnabled()) {
+    writeState(sessionID, { at: Date.now(), calls: state.calls, messages })
+    const ask = messages === 1 ? newAsk(meta) : undefined
+    const tier = ask ? await selectTier(ask, input.prompt ?? "") : null
+    const plan = resolvePlan(tier)
+    if (tier && plan.tier !== "standard") emit({ systemMessage: startNote(plan) })
+    logTurn(state.calls + (ask ? 1 : 0))
+    return
+  }
   const skills = scanSkillDirs(skillDirs(input))
   if (skills.length === 0) {
     logTurn(state.calls)
@@ -122,9 +143,7 @@ async function userPromptSubmit(input: HookInput): Promise<void> {
   if (context.length > 0) out.hookSpecificOutput = { hookEventName: "UserPromptSubmit", additionalContext: context.join("\n\n") }
   // Shown to you, not the model, once per session. The session model cannot change from a hook; this only
   // tells you what `jev-for-all start` would have chosen.
-  if (firstPrompt && tier && plan.tier !== "standard") {
-    out.systemMessage = `jev-for-all: this looks ${plan.tier}; \`jev-for-all start\` would run it on ${plan.model} (${plan.effort}).`
-  }
+  if (firstPrompt && tier && plan.tier !== "standard") out.systemMessage = startNote(plan)
   if (Object.keys(out).length > 0) emit(out)
 
   logDecision({

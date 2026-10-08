@@ -128,6 +128,9 @@ push `main`. npm package `jev-for-all`; npm user `emirb42`.
   field), so skill routing applies to every agent.
 - The transport passes `retries: { strategy: "none" }` on purpose. The SDK default retries 5xx
   with backoff for up to an hour, which is not acceptable inside a hook. Do not remove it.
+- The Claude Code hook's per-prompt skill/subagent hints are opt-in (`hints` in `config.json`, `SYSTEM_ONE_HINTS`).
+  Off, ordinary prompts get no Jev call, no injected text and no Skill denial; only the first prompt may show the
+  user a `systemMessage` note. Do not make them default-on without an L2 result that shows a gain.
 - `LAYA_BASE_URL` swaps the transport to a self-hosted Laya server (`createJev` in `src/jev.ts`, same
   wire protocol). It wins over OpenRouter and never falls back to it. `resolveKey` stands in for the
   OpenRouter key in every host. Measured far below Jev on our decisions; see the README before enabling.

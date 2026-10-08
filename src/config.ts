@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { policy } from "./policy"
 
 // Everything user-editable lives in one directory, shared by every harness:
-//   config.json  { "apiKey": "sk-or-...", "layaUrl": "http://127.0.0.1:8000" }   which backend answers
+//   config.json  { "apiKey": "sk-or-...", "layaUrl": "http://127.0.0.1:8000", "hints": false }   backend and hint switch
 //   models.json  per-tier harness / model / effort overrides                      what runs
 export function configDir(): string {
   return join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "jev-for-all")
@@ -13,12 +13,14 @@ export function configDir(): string {
 export interface UserConfig {
   apiKey?: string
   layaUrl?: string
+  // Per-prompt skill and subagent hints in the Claude Code hook. Off unless true (or SYSTEM_ONE_HINTS=1).
+  hints?: boolean
 }
 
 export function loadConfig(): UserConfig {
   try {
     const raw = JSON.parse(readFileSync(join(configDir(), "config.json"), "utf8")) as UserConfig
-    return { apiKey: raw.apiKey?.trim() || undefined, layaUrl: raw.layaUrl?.trim() || undefined }
+    return { apiKey: raw.apiKey?.trim() || undefined, layaUrl: raw.layaUrl?.trim() || undefined, hints: raw.hints === true }
   } catch {
     return {}
   }
@@ -44,7 +46,7 @@ export function ensureConfig(options: { apiKey?: string; layaUrl?: string } = {}
     }
     write("models.json", { _help: MODELS_HELP, ...policy.models.tierConfig })
     // 0600: it may hold an API key.
-    write("config.json", { apiKey: options.apiKey ?? "", layaUrl: options.layaUrl ?? "" }, 0o600)
+    write("config.json", { apiKey: options.apiKey ?? "", layaUrl: options.layaUrl ?? "", hints: false }, 0o600)
   } catch {}
   return created
 }

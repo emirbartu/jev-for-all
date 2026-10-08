@@ -13,8 +13,8 @@ the one that is not installed.
 ## What `init` does
 
 1. Creates `~/.config/jev-for-all/` (or `$XDG_CONFIG_HOME/jev-for-all/`) with two files, only if missing:
-   - `config.json`: `{ "apiKey": "", "layaUrl": "" }`, mode 0600. `--key` fills `apiKey`, `--laya <url>`
-     fills `layaUrl`. A key already exported as `OPENROUTER_API_KEY` is used without storing it.
+   - `config.json`: `{ "apiKey": "", "layaUrl": "", "hints": false }`, mode 0600. `--key` fills `apiKey`, `--laya <url>`
+     fills `layaUrl`. `hints` turns the per-prompt Claude Code skill and subagent hints on (default off). A key already exported as `OPENROUTER_API_KEY` is used without storing it.
    - `models.json`: the three tiers (`light` = claude haiku, `standard` and `heavy` = claude sonnet), each
      `{ harness, model, effort }`. This is the example config; edit it to change models or thinking levels,
      or set `light` to `{ "harness": "opencode", "model": "opencode-go/deepseek-v4.1-flash" }`.

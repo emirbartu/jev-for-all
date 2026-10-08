@@ -1,7 +1,7 @@
 {
   "name": "system-one",
   "description": "Picks the cheapest adequate model and thinking effort, hands bulk work to a low-cost worker, and routes skills and subagents with Jev.",
-  "version": "0.6.3",
+  "version": "0.7.0",
   "author": {
     "name": "jev-for-all"
   }

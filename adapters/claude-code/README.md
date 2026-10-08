@@ -1,6 +1,12 @@
 # system-one for Claude Code
 
-Jev-routed skill selection for Claude Code. On every `UserPromptSubmit` the plugin asks
+**Per-prompt hints are off by default** (`"hints": true` in `~/.config/jev-for-all/config.json`, or `SYSTEM_ONE_HINTS=1`). Claude
+already picks skills and subagents itself, and injecting hints cost tokens without a measured gain, so out of the box the
+hook makes no Jev call on ordinary prompts, injects nothing and denies nothing; it only shows you a one-line note on the
+first prompt (never sent to the model) when Jev thinks `jev-for-all start` would have chosen a different tier. The rest of
+this page describes what happens when hints are on.
+
+With hints on, on every `UserPromptSubmit` the plugin asks
 [Jev](https://docs.typesafe.ai) whether the prompt needs a skill; if one fits, its body is
 injected as `additionalContext`, otherwise a short "skills are routed externally" note is
 injected and the `Skill` tool is denied in that session. An optional `Stop` gate asks Jev
@@ -39,12 +45,12 @@ A hook cannot change the session's model, so the work is split across what Claud
 | --- | --- | --- | --- |
 | Session model and effort | `jev-for-all start` runs `claude --model <m> --effort <e>` | once, at launch | yes |
 | Light worker | `--agents` defines `jev-light` on the light model at launch | once, at launch | the main agent chooses to use it |
-| Per-prompt delegation | `UserPromptSubmit` hook adds a `<system_one_agents>` hint naming a subagent and its `model` (the Agent tool's `model` parameter beats any other setting) | every prompt | advisory |
+| Per-prompt delegation (opt-in) | `UserPromptSubmit` hook adds a `<system_one_agents>` hint naming a subagent and its `model` (the Agent tool's `model` parameter beats any other setting) | every prompt | advisory |
 | Start-up note | hook `systemMessage` tells you what `start` would have chosen | first prompt | none |
 | OpenCode worker | MCP tool `jev_delegate_light`, only when light is on OpenCode | when the agent calls it | the agent calls it |
 
-The first two are deterministic and free of per-prompt cost. The hook layer costs one Jev call per prompt and a
-few tokens of hint, and the model can ignore it, so it is the first thing to switch off if you want less.
+The first two are deterministic and free of per-prompt cost. The hook layer costs three Jev calls per prompt and a
+few tokens of hint, and the model can ignore it, so it is off unless you turn it on.
 
 ## Environment
 
@@ -54,6 +60,7 @@ few tokens of hint, and the model can ignore it, so it is the first thing to swi
 | `SYSTEM_ONE_SERVER_URL` | Optional. Override the decisions endpoint (proxies). |
 | `SYSTEM_ONE_SKILL_DIRS` | Optional. Colon-separated skill directories; replaces the default roster source. |
 | `SYSTEM_ONE_STATE_DIR` | Optional. Per-session state and decision log directory. |
+| `SYSTEM_ONE_HINTS` | Optional. `1`/`true` turns the per-prompt skill and subagent hints on, `0` forces them off; unset follows `hints` in `config.json` (default false). |
 | `SYSTEM_ONE_VERIFY` | Optional. `1`/`true` turns the Stop verification gate on. Unset or `0` leaves it off. |
 
 ## Roster

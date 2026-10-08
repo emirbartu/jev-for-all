@@ -1,6 +1,7 @@
 name: publish
 
 # Every push to main runs the checks, then publishes to npm when package.json's version is new.
+# It also mirrors the release to GitHub Packages (scoped name) so the repo's Packages box fills in.
 # Auth is npm trusted publishing (OIDC): no token to store. Link it once with
 #   npm trust github jev-for-all --file publish.yml --repo emirbartu/jev-for-all -y
 on:
@@ -10,6 +11,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  packages: write
 
 jobs:
   publish:
@@ -33,4 +35,15 @@ jobs:
             echo "$name@$version is already published, nothing to do"
           else
             npm publish --access public
+          fi
+      - name: Mirror to GitHub Packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          npm pkg set name=@emirbartu/jev-for-all
+          if npm view "@emirbartu/jev-for-all@$version" version --registry=https://npm.pkg.github.com >/dev/null 2>&1; then
+            echo "already on GitHub Packages"
+          else
+            npm publish --registry=https://npm.pkg.github.com --access public
           fi

@@ -78,6 +78,8 @@ tool-result bodies is not an option today.
 | `OPENROUTER_API_KEY=... bun scripts/jev-probe.ts decisions` | Live Jev smoke test (noul and choice). |
 | `OPENROUTER_API_KEY=... bun scripts/jev-probe.ts catalog tools.json [task]` | Live tool-routing probe against a tool catalog. |
 | `OPENROUTER_API_KEY=... bun scripts/agents-l1.ts` | Live subagent-selection check (12 cases). |
+| `OPENROUTER_API_KEY=... bun scripts/tier-l1.ts` | Live model-tier router check (48 labelled cases, tuned and held-out halves). |
+| `OPENROUTER_API_KEY=... bun scripts/bench-claude.ts run haiku,sonnet[,opus]` then `report` | Real-model benchmark: 12 tasks with hidden checks, real `claude -p` cost and pass/fail. Uses your quota. |
 | `bun scripts/eval.ts` | Headless baseline-vs-routed usage eval. Needs `opencode` on PATH, provider auth, and optionally `EVAL_MODEL`. |
 
 Install for use is a local path (`{ "package": "/abs/path/to/repo" }`); the package is not
@@ -99,6 +101,8 @@ push `main`. npm package `jev-for-all`; npm user `emirb42`.
 | `src/jev.ts` | Transport plus runtime guards `asChoice` and `asNoul`. |
 | `src/skills.ts` | Gate (3 nouls + `gate::mechanical` veto) -> rank (choice) -> optional rerank (shortlist plus `fits::<id>` nouls) -> `{ id }` or `null`. |
 | `src/agents.ts` | `selectAgent`: `delegate` noul plus a choice over subagents with a `none` option (used by the Claude Code adapter). |
+| `src/models.ts` | `selectTier` (one Jev choice: light, standard, heavy; asymmetric thresholds, falls back to standard) and the user-editable tier-to-model catalog. |
+| `bin/pick.ts` | Session-start launcher: picks one model for the whole session and starts `claude` or `opencode` with it. Also prints per-tier OpenCode subagents. |
 | `src/tools.ts` | `renderState`, `routeTools`, `applyToolDecision`. |
 | `src/observe.ts` | Usage JSONL recorder, parse, summarize and report helpers. |
 | `src/browser.ts` plus `src/jev-runner.py` | The `browser_task` tool: builds the `uv run` command, parses one `JEV_RESULT` JSON line, fails open. The Python side runs one Jev Ultrafast goal and prints that line; it never raises. |

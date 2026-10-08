@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs"
 import { createJev, type Ask } from "../../../src/jev"
 import { policy } from "../../../src/policy"
 import { NONE_CONTEXT, decide, injectionFor } from "../lib/decide"
-import { agentHint, selectAgent } from "../../../src/agents"
+import { agentHint, selectAgent, subagentTier } from "../../../src/agents"
+import { modelFor, selectTier } from "../../../src/models"
 import { defaultAgentDirs, defaultSkillDirs, scanAgentDirs, scanSkillDirs } from "../lib/roster"
 import { readState, writeState, type SessionState } from "../lib/state"
 import { logDecision, logUsage } from "../lib/log"
@@ -102,10 +103,18 @@ async function userPromptSubmit(input: HookInput): Promise<void> {
   } else {
     writeState(sessionID, { at: Date.now(), calls, messages })
   }
-  if (agent) context.push(agentHint(agent))
-  if (context.length > 0) {
-    emit({ hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: context.join("\n\n") } })
+  // The tier decision is only needed to pick a subagent model, or once per session as a start-up hint.
+  const firstPrompt = messages === 1
+  const tier = ask && (agent || firstPrompt) ? await selectTier(ask, input.prompt ?? "") : null
+  if (agent) context.push(agentHint(agent, modelFor("claude", subagentTier(tier?.tier ?? "standard", agent.id)) ?? "sonnet"))
+  const out: Record<string, unknown> = {}
+  if (context.length > 0) out.hookSpecificOutput = { hookEventName: "UserPromptSubmit", additionalContext: context.join("\n\n") }
+  // Shown to you, not the model. Once per session, and only when the pick differs from the usual default:
+  // switching models mid-session throws away the prompt cache, so decide at the start and keep it.
+  if (firstPrompt && tier && tier.tier !== "standard") {
+    out.systemMessage = `jev-for-all: this session looks ${tier.tier}; ${modelFor("claude", tier.tier)} would fit (set it at the start with /model, then keep it).`
   }
+  if (Object.keys(out).length > 0) emit(out)
 
   logDecision({
     sessionID,

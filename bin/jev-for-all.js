@@ -213,6 +213,8 @@ const USAGE = `jev-for-all: OpenCode plugin installer
 
 Usage:
   jev-for-all install [--config <path>] [--key <sk-or-...>] [--dry-run]
+  jev-for-all pick|claude|opencode "<first prompt>"   choose one model for the session, then launch it
+  jev-for-all opencode-agents                          print per-tier subagents for opencode.json
   jev-for-all help
 
 install registers the plugin in your OpenCode config (idempotent).
@@ -240,6 +242,13 @@ async function promptKey() {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2))
+  if (["pick", "claude", "opencode", "opencode-agents"].includes(args.command)) {
+    // Needs bun for the TypeScript core; the installer above stays dependency-free.
+    const { spawnSync } = await import("node:child_process")
+    const result = spawnSync("bun", [join(dirname(new URL(import.meta.url).pathname), "pick.ts"), ...process.argv.slice(2)], { stdio: "inherit" })
+    process.exitCode = result.status ?? 1
+    return
+  }
   if (args.command !== "install") {
     console.log(USAGE)
     return

@@ -1,6 +1,6 @@
 {
   "name": "jev-for-all",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "license": "MIT",
   "description": "An OpenCode plugin that routes skill and tool choices through Jev, TypeSafe's System One decision model.",
   "repository": "github:emirbartu/jev-for-all",

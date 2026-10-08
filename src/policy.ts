@@ -102,11 +102,29 @@ export interface AgentPolicy {
   none: string
   noneLabel: string
   questions: { delegate: string; pick: string }
-  builtin: Array<{ id: string; description: string }>
+  builtin: Array<{ id: string; description: string; maxTier?: Tier }>
+  subagentMaxTier: Tier
   hint: string
 }
 
+export type Tier = "light" | "standard" | "heavy"
+
+export interface ModelPolicy {
+  tiers: Tier[]
+  fallback: Tier
+  lightMin: number
+  heavyMin: number
+  ids: { tier: string; external: string }
+  lean: { externalMax: number }
+  questions: { tier: string; external: string }
+  leanArgs: Record<string, string[]>
+  criteria: Record<Tier, string>
+  catalog: Record<string, Record<Tier, string>>
+  launch: Record<string, string[]>
+}
+
 export interface Policy {
+  models: ModelPolicy
   skills: SkillPolicy
   agents: AgentPolicy
   tools: ToolPolicy

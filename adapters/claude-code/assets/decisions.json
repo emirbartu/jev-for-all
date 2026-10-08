@@ -55,18 +55,54 @@
     "builtin": [
       {
         "id": "Explore",
+        "maxTier": "light",
         "description": "Read-only search across many files or directories; returns conclusions, not file dumps"
       },
       {
         "id": "Plan",
+        "maxTier": "standard",
         "description": "Designs an implementation plan and weighs architecture trade-offs"
       },
       {
         "id": "general-purpose",
+        "maxTier": "standard",
         "description": "Researches open questions and runs multi-step tasks independently"
       }
     ],
-    "hint": "<system_one_agents>\nDelegate this request to the {{id}} subagent via the Agent tool instead of exploring in the main conversation.\n</system_one_agents>"
+    "subagentMaxTier": "standard",
+    "hint": "<system_one_agents>\nDelegate this request to the {{id}} subagent via the Agent tool with model: \"{{model}}\", the cheapest model that fits, instead of working it in the main conversation.\n</system_one_agents>"
+  },
+  "models": {
+    "tiers": ["light", "standard", "heavy"],
+    "fallback": "standard",
+    "lightMin": 0.6,
+    "heavyMin": 0.5,
+    "ids": { "tier": "tier", "external": "external" },
+    "lean": { "externalMax": 0.2 },
+    "questions": {
+      "tier": "How demanding is this coding request for the AI model that has to carry it out?",
+      "external": "Does this request need an external service, a browser, a database, or a third-party API, beyond the project's own files and the shell?"
+    },
+    "criteria": {
+      "light": "light: a small, well-specified, mechanical step or a short factual question, such as a rename, a one-line edit, reading a file, running one command, or a quick explanation",
+      "standard": "standard: ordinary coding work with a clear goal, such as implementing a small feature, fixing a bug in one place, writing tests, or explaining how some code works",
+      "heavy": "heavy: hard work that needs deep reasoning, such as designing an architecture, hunting a subtle or cross-cutting bug, a large refactor, security-sensitive changes, or vague requirements that need judgment"
+    },
+    "catalog": {
+      "claude": { "light": "haiku", "standard": "sonnet", "heavy": "opus" },
+      "opencode": {
+        "light": "opencode-go/deepseek-v4-flash",
+        "standard": "opencode-go/kimi-k2.7-code",
+        "heavy": "opencode-go/glm-5.3"
+      }
+    },
+    "leanArgs": {
+      "claude": ["--disable-slash-commands", "--strict-mcp-config", "--mcp-config", "{\"mcpServers\":{}}"]
+    },
+    "launch": {
+      "claude": ["claude", "--model", "{model}"],
+      "opencode": ["opencode", "--model", "{model}", "--prompt", "{prompt}"]
+    }
   },
   "control": {
     "verify": false,

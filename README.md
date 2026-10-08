@@ -65,6 +65,51 @@ Let your agent install it: point it at
 - Every operation inside `browser_task`: given a goal, Jev picks each click, target and typed
   value.
 
+## Pick the model, not just the skill
+
+Built for people who split work across cheap subscriptions (a $20 Claude plan, OpenCode Go). Jev
+decides once, at the start, which model a session needs, then stays out of the way. Switching models
+inside a session throws away the prompt cache and the agent's context, so it never does that.
+
+```bash
+jev-for-all claude   "rename x to count in utils.js"   # light  -> haiku, lean session
+jev-for-all opencode "design the sync architecture"    # heavy  -> your heavy OpenCode model
+jev-for-all pick     "<prompt>"                        # just print the decision as JSON
+jev-for-all opencode-agents                            # per-tier subagents for opencode.json
+```
+
+- **Tiers.** One Jev choice labels the first prompt `light`, `standard` or `heavy`. Asymmetric on
+  purpose: a hard task on a weak model costs quality, an easy task on a strong model only costs money,
+  so `light` needs 0.6 and `heavy` 0.5 probability and anything unclear becomes `standard`.
+- **Your models.** Defaults are in `spec/decisions.json`; override any tier in
+  `~/.config/jev-for-all/models.json`, e.g. `{ "claude": { "standard": "haiku" } }`.
+- **Lean sessions.** For a light task that needs no external service, the launcher starts Claude Code
+  with skills and MCP servers off. Restart without it if you change your mind.
+- **Subagents.** The Claude Code hook tells the main agent to delegate with a `model` chosen by tier,
+  capped at `standard` (and `light` for `Explore`, which only gathers). In OpenCode, the printed
+  `agent` block pins one subagent per tier to your catalog.
+- **Fails open.** No key, timeout or unclear answer: the harness starts with your own default.
+
+### What it measured
+
+`bun scripts/bench-claude.ts`: 12 small coding tasks, each with a hidden check that a hand-written
+reference solution passes, run through headless Claude Code with every plugin off. Costs are the
+`total_cost_usd` Claude Code reports; one run per cell.
+
+| | pass | cost | input tokens / task |
+| --- | --- | --- | --- |
+| always Sonnet | 11 / 12 | $1.014 | n/a |
+| Jev routed (default catalog) | 11 / 12 | $0.658 (-35%) | n/a |
+| always Haiku | 12 / 12 | $0.062 (-94%) | 99k |
+| Haiku, lean session | 12 / 12 | $0.037 | 63k (-37%) |
+
+Read it carefully. These are single-file tasks, so Haiku solving all of them says little about large
+multi-file work, and one run per cell is noisy (Sonnet's one failure, `lru-ttl`, is likely luck).
+Tier labels matched my own on 46 of 48 prompts, but I wrote both. The default catalog is deliberately
+conservative (`standard` stays on Sonnet); if your tasks look like the benchmark, put Haiku on
+`standard` and keep the 94%. The lean saving is the firmest result: skills and MCP schemas were about
+40% of the input for a one-line edit, and it holds on any model.
+
 ## The other harnesses
 
 | Harness | Adapter |

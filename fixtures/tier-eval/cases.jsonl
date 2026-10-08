@@ -1,0 +1,48 @@
+{"id": "light-1", "request": "What does HTTP 429 mean?", "expected": "light"}
+{"id": "light-2", "request": "Rename the variable x to count in utils.js", "expected": "light"}
+{"id": "light-3", "request": "Add dist/ to .gitignore", "expected": "light"}
+{"id": "light-4", "request": "Bump the version in package.json to 1.2.0", "expected": "light"}
+{"id": "light-5", "request": "Read src/index.ts and tell me what the first function does", "expected": "light"}
+{"id": "light-6", "request": "Run the tests and paste the output", "expected": "light"}
+{"id": "light-7", "request": "Fix the typo in the README title", "expected": "light"}
+{"id": "light-8", "request": "Delete the unused import on line 4 of app.ts", "expected": "light"}
+{"id": "light-9", "request": "What is the difference between let and const in JavaScript?", "expected": "light"}
+{"id": "light-10", "request": "Add a console.log at the start of main() so I can see when it runs", "expected": "light"}
+{"id": "light-11", "request": "Change the default port from 3000 to 8080", "expected": "light"}
+{"id": "light-12", "request": "Convert this for-loop to Array.map", "expected": "light"}
+{"id": "light-13", "request": "Search the repo for TODO comments", "expected": "light"}
+{"id": "light-14", "request": "Write a one-line shell command to count lines in all .py files", "expected": "light"}
+{"id": "light-15", "request": "Format this JSON file with 2-space indentation", "expected": "light"}
+{"id": "light-16", "request": "What does git rebase do?", "expected": "light"}
+{"id": "light-17", "request": "Translate the error message in login.ts to Turkish", "expected": "light"}
+{"id": "light-18", "request": "Add a .env.example with the three variables used in config.ts", "expected": "light"}
+{"id": "standard-1", "request": "Add a /health endpoint to the Express server that returns the git sha", "expected": "standard"}
+{"id": "standard-2", "request": "Write unit tests for the parseDate function in dates.ts", "expected": "standard"}
+{"id": "standard-3", "request": "This function returns undefined when the list is empty, find and fix the bug", "expected": "standard"}
+{"id": "standard-4", "request": "Implement pagination for the /users endpoint with limit and offset params", "expected": "standard"}
+{"id": "standard-5", "request": "Refactor the duplicated validation code in signup.ts and profile.ts into one helper", "expected": "standard"}
+{"id": "standard-6", "request": "Add a dark mode toggle to the settings page and persist it in localStorage", "expected": "standard"}
+{"id": "standard-7", "request": "Write a Python script that merges all CSV files in a folder and drops duplicate rows", "expected": "standard"}
+{"id": "standard-8", "request": "Explain how the auth middleware in this repo works", "expected": "standard"}
+{"id": "standard-9", "request": "Add input validation with zod to the createOrder API handler", "expected": "standard"}
+{"id": "standard-10", "request": "Convert the callback-based file helpers in io.js to async/await", "expected": "standard"}
+{"id": "standard-11", "request": "The build fails with a TypeScript error in cart.tsx, fix it", "expected": "standard"}
+{"id": "standard-12", "request": "Add retry with exponential backoff to the fetch wrapper", "expected": "standard"}
+{"id": "standard-13", "request": "Write a README section explaining how to run the project locally", "expected": "standard"}
+{"id": "standard-14", "request": "Create a React component for a sortable table with props for columns and rows", "expected": "standard"}
+{"id": "standard-15", "request": "Write a SQL migration that adds a nullable email column to users and backfills it", "expected": "standard"}
+{"id": "standard-16", "request": "Add a GitHub Actions workflow that runs lint and tests on pull requests", "expected": "standard"}
+{"id": "standard-17", "request": "Implement a debounce hook and use it in the search box", "expected": "standard"}
+{"id": "standard-18", "request": "Review this 80-line diff for bugs", "expected": "standard"}
+{"id": "heavy-1", "request": "Design the architecture for a real-time collaborative editor that supports offline edits and conflict resolution", "expected": "heavy"}
+{"id": "heavy-2", "request": "Our app intermittently loses writes under load; find the race condition across the queue worker and the db layer", "expected": "heavy"}
+{"id": "heavy-3", "request": "Migrate the whole codebase from JavaScript to TypeScript incrementally without breaking the build, and plan the order of modules", "expected": "heavy"}
+{"id": "heavy-4", "request": "Audit the authentication and session handling for security vulnerabilities and propose fixes", "expected": "heavy"}
+{"id": "heavy-5", "request": "Why is this service using 4GB of memory after a few hours? Investigate across the caching layer, the worker pool and the logging module", "expected": "heavy"}
+{"id": "heavy-6", "request": "Redesign the database schema to support multi-tenancy with per-tenant encryption, and plan the migration with zero downtime", "expected": "heavy"}
+{"id": "heavy-7", "request": "Decide between a monolith and microservices for our 3-person startup and justify with trade-offs, then sketch the module boundaries", "expected": "heavy"}
+{"id": "heavy-8", "request": "Implement a distributed rate limiter that is correct under clock skew and network partitions", "expected": "heavy"}
+{"id": "heavy-9", "request": "Refactor the 3000-line state machine into smaller modules while keeping all behaviors; the tests are incomplete so you must first work out the intended behavior", "expected": "heavy"}
+{"id": "heavy-10", "request": "Figure out why the CI is flaky: tests pass locally, fail 1 in 8 times on CI, and the failures are in unrelated files", "expected": "heavy"}
+{"id": "heavy-11", "request": "Build a plugin system for this CLI with sandboxed execution, versioned APIs, and backward compatibility guarantees", "expected": "heavy"}
+{"id": "heavy-12", "request": "Optimize the query planner: this report takes 40 seconds and touches 6 tables with several subqueries; propose and validate an approach", "expected": "heavy"}

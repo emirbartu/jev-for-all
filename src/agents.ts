@@ -1,4 +1,4 @@
-import { formatTemplate, policy } from "./policy"
+import { formatTemplate, policy, type Tier } from "./policy"
 import { type Ask, asChoice, asNoul } from "./jev"
 
 export interface AgentLike {
@@ -38,6 +38,17 @@ export async function selectAgent(
   }
 }
 
-export function agentHint(decision: { id: string }): string {
-  return formatTemplate(policy.agents.hint, { id: decision.id })
+const order: Tier[] = ["light", "standard", "heavy"]
+
+// The subagent runs on the tier Jev picked for the request, capped at subagentMaxTier so nothing is
+// delegated to your most expensive model automatically (the main agent can still choose to).
+// Each built-in agent also has its own cap: Explore only gathers, so it never needs more than light.
+export function subagentTier(tier: Tier, agentId?: string): Tier {
+  const own = policy.agents.builtin.find((agent) => agent.id === agentId)?.maxTier
+  const cap = order.indexOf(own ?? policy.agents.subagentMaxTier)
+  return order[Math.min(order.indexOf(tier), cap)]!
+}
+
+export function agentHint(decision: { id: string }, model: string): string {
+  return formatTemplate(policy.agents.hint, { id: decision.id, model })
 }

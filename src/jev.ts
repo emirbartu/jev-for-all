@@ -35,7 +35,49 @@ export class JevError extends Error {
   }
 }
 
+// Self-hosted Laya speaks the same `POST /v1/systemone` wire protocol as TypeSafe's Jev, so a local
+// server is a drop-in backend: set LAYA_BASE_URL (and LAYA_API_KEY if the server has one). It wins over
+// OpenRouter when set, and never falls back to it: a down local server fails open instead of spending credits.
+export function layaURL(): string | undefined {
+  return process.env.LAYA_BASE_URL?.replace(/\/+$/, "") || undefined
+}
+
+// The key every host needs before it enables routing. Laya needs no OpenRouter key, so a placeholder stands in.
+export function resolveKey(explicit?: string): string | undefined {
+  return layaURL() ? (explicit ?? "laya") : (explicit ?? process.env.OPENROUTER_API_KEY)
+}
+
+async function askLaya(base: string, options: JevOptions, state: unknown, questions: Record<string, Question>): Promise<Answers> {
+  let response: Response
+  try {
+    response = await fetch(`${base}/v1/systemone`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(process.env.LAYA_API_KEY ? { authorization: `Bearer ${process.env.LAYA_API_KEY}` } : {}),
+      },
+      // Never the Jev model id: Laya answers 422 to ids it does not know, like ~typesafe/jev-latest.
+      // LAYA_MODEL (english, multilingual, typed-decisions) pins a checkpoint; unset lets Laya route.
+      body: JSON.stringify({ ...(process.env.LAYA_MODEL ? { model: process.env.LAYA_MODEL } : {}), state, questions }),
+      signal: AbortSignal.timeout(options.timeoutMs ?? 1000),
+    })
+  } catch (error) {
+    throw new JevError(`jev-for-all laya request failed: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  if (!response.ok) throw new JevError(`jev-for-all laya request failed: HTTP ${response.status}`, response.status)
+  const body = (await response.json()) as { answers?: unknown; model?: unknown; usage?: { input_tokens?: unknown; output_tokens?: unknown } }
+  if (!body.answers || typeof body.answers !== "object") throw new JevError("jev-for-all laya response missing answers")
+  options.onMeta?.({
+    model: typeof body.model === "string" ? body.model : "laya",
+    inputTokens: typeof body.usage?.input_tokens === "number" ? body.usage.input_tokens : undefined,
+    outputTokens: typeof body.usage?.output_tokens === "number" ? body.usage.output_tokens : undefined,
+  })
+  return body.answers as Answers
+}
+
 export function createJev(options: JevOptions): Ask {
+  const laya = layaURL()
+  if (laya) return ({ state, questions }) => askLaya(laya, options, state, questions)
   const model = options.model ?? "~typesafe/jev-latest"
   const client = new OpenRouter({ apiKey: options.apiKey })
 

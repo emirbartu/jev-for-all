@@ -11,7 +11,7 @@
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { createCache, createWarnOnce, hashKey } from "../../index"
-import { createJev, type Ask } from "../../src/jev"
+import { createJev, resolveKey, type Ask } from "../../src/jev"
 import { createRecorder, summarize, type Recorder, type UsageSample } from "../../src/observe"
 import { defaultToolRouting, applyToolDecision, renderState, routeTools, type ToolDecision } from "../../src/tools"
 import { decideVerification } from "../../src/verify"
@@ -258,7 +258,7 @@ export default function jevForPi(pi: PiExtensionAPI): void {
     options = readPiOptions(readPiSettings(agentDir))
     if (options.sessionID) sessionID = options.sessionID
     warnOnce = createWarnOnce("[system-one]")
-    const apiKey = options.apiKey ?? ENV.OPENROUTER_API_KEY
+    const apiKey = resolveKey(options.apiKey ?? ENV.OPENROUTER_API_KEY)
     const routing = options.skills.enabled || options.tools.enabled
     if (apiKey) {
       ask = createJev({

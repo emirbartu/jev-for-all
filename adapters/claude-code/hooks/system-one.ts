@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs"
-import { createJev, type Ask } from "../../../src/jev"
+import { createJev, resolveKey, type Ask } from "../../../src/jev"
 import { policy } from "../../../src/policy"
 import { NONE_CONTEXT, decide, injectionFor } from "../lib/decide"
 import { agentHint, selectAgent, subagentTier } from "../../../src/agents"
@@ -40,7 +40,7 @@ function agentName(input: HookInput): string {
 }
 
 function newAsk(meta: { model?: string; inputTokens?: number; outputTokens?: number }): Ask | undefined {
-  const apiKey = process.env.OPENROUTER_API_KEY
+  const apiKey = resolveKey()
   if (!apiKey) return undefined
   return createJev({
     apiKey,

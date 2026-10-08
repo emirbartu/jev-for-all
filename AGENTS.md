@@ -125,6 +125,9 @@ push `main`. npm package `jev-for-all`; npm user `emirb42`.
   field), so skill routing applies to every agent.
 - The transport passes `retries: { strategy: "none" }` on purpose. The SDK default retries 5xx
   with backoff for up to an hour, which is not acceptable inside a hook. Do not remove it.
+- `LAYA_BASE_URL` swaps the transport to a self-hosted Laya server (`createJev` in `src/jev.ts`, same
+  wire protocol). It wins over OpenRouter and never falls back to it. `resolveKey` stands in for the
+  OpenRouter key in every host. Measured far below Jev on our decisions; see the README before enabling.
 - `serverURL` is the test and proxy seam. Conformance asserts `POST /api/alpha/decisions` and the
   exact body, so changing the request shape requires updating the fixtures.
 - Hook events are mutable by design. `applyToolDecision` edits `event.tools` and pushes onto

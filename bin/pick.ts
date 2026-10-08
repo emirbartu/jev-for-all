@@ -7,7 +7,7 @@
 //   jev-for-all claude   "<prompt>"                            pick, then run `claude --model <m> "<prompt>"`
 //   jev-for-all opencode "<prompt>"                            pick, then run `opencode --model <m> --prompt "<prompt>"`
 import { spawnSync } from "node:child_process"
-import { createJev } from "../src/jev"
+import { createJev, resolveKey } from "../src/jev"
 import { isLean, loadCatalog, modelFor, selectTier } from "../src/models"
 import { policy } from "../src/policy"
 
@@ -34,7 +34,7 @@ if (!command || !prompt) {
   process.exit(2)
 }
 
-const apiKey = process.env.OPENROUTER_API_KEY
+const apiKey = resolveKey()
 const decision = apiKey ? await selectTier(createJev({ apiKey, timeoutMs: 3000 }), prompt) : null
 const model = decision ? modelFor(harness, decision.tier) : undefined
 

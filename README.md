@@ -110,6 +110,36 @@ conservative (`standard` stays on Sonnet); if your tasks look like the benchmark
 `standard` and keep the 94%. The lean saving is the firmest result: skills and MCP schemas were about
 40% of the input for a one-line edit, and it holds on any model.
 
+## Self-hosting with Laya (experimental, not recommended yet)
+
+[Laya](https://github.com/NandhaKishorM/laya) is an open, self-hosted System One model that speaks the
+same `POST /v1/systemone` protocol as Jev, so it plugs in with one variable and no OpenRouter credits:
+
+```bash
+uv venv --python 3.12 laya-venv && VIRTUAL_ENV=$PWD/laya-venv uv pip install "laya[serve]"
+LAYA_DEVICE=cuda LAYA_PRELOAD=1 LAYA_MODELS=english,multilingual LAYA_DEFAULT_MODEL=english laya-venv/bin/laya-serve
+export LAYA_BASE_URL=http://127.0.0.1:8000     # every host in this repo now uses it
+export LAYA_MODEL=typed-decisions              # optional: english | multilingual | typed-decisions
+```
+
+With `LAYA_BASE_URL` set Laya is used instead of OpenRouter and never falls back to it, so a stopped
+server just means no routing. It is much faster (21 ms median on an RTX 3060, against about 450 ms),
+**but on our decisions the stock checkpoints are much worse than Jev**, measured on the same cases:
+
+| | Jev | Laya `english` | Laya `typed-decisions` |
+| --- | --- | --- | --- |
+| Skill routing, hit rate (64 cases) | 93.8% | 37.5% | 42.2% |
+| Wrong skill picks | 0% | 23.4% | 31.3% |
+| Spurious skill loads | 0% | 21.9% | 15.6% |
+| Model tier, accuracy (48 cases) | 95.8% | 41.7% (60.4% by plain argmax) | 64.6% by plain argmax |
+| Subagent delegation (12 cases) | 11 / 12 | 8 / 12, never delegated | not run |
+
+Laya's own README says the base checkpoints are meant to be fine-tuned, and that its probabilities are
+flatter and differently calibrated than Jev's, so thresholds tuned for Jev do not transfer. A wrong skill
+pick is worse than none, so leave this off until a fine-tuned checkpoint beats the table above. The route
+to get there is to label a few thousand prompts with Jev once (cents of credits) and fine-tune Laya on
+them; that has not been done.
+
 ## The other harnesses
 
 | Harness | Adapter |

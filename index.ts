@@ -1,5 +1,5 @@
 import { Plugin } from "@opencode/plugin"
-import { createJev, type Ask } from "./src/jev"
+import { createJev, resolveKey, type Ask } from "./src/jev"
 import { applySkillDecision, defaultSkillRouting, selectSkill, type SkillRoutingConfig } from "./src/skills"
 import { createRecorder, summarize, type UsageSample } from "./src/observe"
 import { policy } from "./src/policy"
@@ -238,10 +238,10 @@ export default Plugin.define({
   id: "jev-for-all",
   async setup(ctx) {
     const options = readOptions((ctx.options ?? {}) as Record<string, unknown>)
-    const apiKey = options.apiKey ?? process.env.OPENROUTER_API_KEY
+    const apiKey = resolveKey(options.apiKey)
     const routing = options.skills.enabled || options.tools.enabled
     if (!apiKey) {
-      if (routing) console.warn("[jev-for-all] routing disabled: set options.apiKey or OPENROUTER_API_KEY")
+      if (routing) console.warn("[jev-for-all] routing disabled: set options.apiKey or OPENROUTER_API_KEY, or LAYA_BASE_URL for a local Laya server")
       // browser_task spawns its own process and reads its own credentials, so it survives a missing key.
       if (!options.observe.enabled && !options.browser.enabled) return
     }

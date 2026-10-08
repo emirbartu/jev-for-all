@@ -34,7 +34,8 @@ jobs:
           if npm view "$name@$version" version >/dev/null 2>&1; then
             echo "$name@$version is already published, nothing to do"
           else
-            npm publish --access public
+            # The registry view lags by a minute or two, so a 409 "Cannot publish over" means it is already there.
+            npm publish --access public 2>&1 | tee out.log || grep -q "Cannot publish over" out.log
           fi
       - name: Mirror to GitHub Packages
         env:

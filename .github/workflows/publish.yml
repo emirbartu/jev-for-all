@@ -43,9 +43,8 @@ jobs:
         run: |
           version=$(node -p "require('./package.json').version")
           npm pkg set name=@emirbartu/jev-for-all
-          echo "//npm.pkg.github.com/:_authToken=$NODE_AUTH_TOKEN" >> "$HOME/.npmrc"
-          if npm view "@emirbartu/jev-for-all@$version" version --registry=https://npm.pkg.github.com >/dev/null 2>&1; then
+          if npm view "@emirbartu/jev-for-all@$version" version --registry=https://npm.pkg.github.com --//npm.pkg.github.com/:_authToken="$NODE_AUTH_TOKEN" >/dev/null 2>&1; then
             echo "already on GitHub Packages"
           else
-            npm publish --registry=https://npm.pkg.github.com --access public
+            npm publish --registry=https://npm.pkg.github.com --//npm.pkg.github.com/:_authToken="$NODE_AUTH_TOKEN" --access public
           fi

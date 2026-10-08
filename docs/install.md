@@ -15,13 +15,14 @@ the one that is not installed.
 1. Creates `~/.config/jev-for-all/` (or `$XDG_CONFIG_HOME/jev-for-all/`) with two files, only if missing:
    - `config.json`: `{ "apiKey": "", "layaUrl": "" }`, mode 0600. `--key` fills `apiKey`, `--laya <url>`
      fills `layaUrl`. A key already exported as `OPENROUTER_API_KEY` is used without storing it.
-   - `models.json`: the three tiers (`light`, `standard`, `heavy`), each `{ harness, model, effort }`.
-     This is the example config; edit it to change models or thinking levels.
+   - `models.json`: the three tiers (`light` = claude haiku, `standard` and `heavy` = claude sonnet), each
+     `{ harness, model, effort }`. This is the example config; edit it to change models or thinking levels,
+     or set `light` to `{ "harness": "opencode", "model": "opencode-go/deepseek-v4.1-flash" }`.
 2. OpenCode: inserts `{ "package": "jev-for-all" }` first in the `"plugins"` array of
    `~/.config/opencode/opencode.jsonc` (never touches anything else; refuses an invalid file).
 3. Claude Code: `claude plugin marketplace add emirbartu/jev-for-all`, then
    `claude plugin install system-one@jev-for-all`. Use `--claude-source <checkout>` for a local clone.
-4. Prints a warning if `opencode auth list` shows no OpenCode Go login (`opencode auth login` fixes it).
+4. Prints a warning if `opencode auth list` shows no OpenCode Go login (only needed when a tier uses OpenCode).
 
 Flags: `--no-claude`, `--no-opencode`, `--dry-run`, `--config <opencode config path>`.
 

@@ -55,7 +55,7 @@ Let your agent install it: point it at
 
 ```jsonc
 {
-  "light":    { "harness": "opencode", "model": "opencode-go/deepseek-v4.1-flash", "effort": "max" },
+  "light":    { "harness": "claude",   "model": "haiku",  "effort": "max" },
   "standard": { "harness": "claude",   "model": "sonnet", "effort": "auto" },
   "heavy":    { "harness": "claude",   "model": "sonnet", "effort": "auto", "minEffort": "high" }
 }
@@ -94,12 +94,12 @@ Three tiers, each a harness, a model and a thinking effort (`tierConfig` in `spe
 
 | Tier | For | Default | Thinking |
 | --- | --- | --- | --- |
-| `light` | low-stakes work where burning tokens does not matter: lint or type errors across a codebase, renames, formatting, boilerplate, short questions | OpenCode Go `deepseek-v4.1-flash` | always `max` |
+| `light` | low-stakes work where burning tokens does not matter: lint or type errors across a codebase, renames, formatting, boilerplate, short questions | Claude `haiku` (or an OpenCode model, see below) | always `max` |
 | `standard` | everything else, and anything Jev is unsure about | Claude `sonnet` | Jev picks `low`, `medium`, `high` or `xhigh` (`medium` when unsure) |
 | `heavy` | the hardest work: architecture, subtle cross-cutting bugs, large refactors | Claude `sonnet` (same as standard for now) | Jev picks, never below `high` |
 
 ```bash
-jev-for-all start "fix all the eslint errors across the codebase"   # light -> opencode on deepseek, max
+jev-for-all start "fix all the eslint errors across the codebase"   # light -> claude --model haiku --effort max
 jev-for-all start "add input validation to createOrder"             # standard -> claude --model sonnet --effort medium
 jev-for-all pick  "<prompt>"                                        # print the decision and command only
 ```
@@ -112,20 +112,20 @@ task needs an external service; if it does not and the task is light, a Claude s
 
 ### The orchestrator and its workers
 
-The model at the top is whatever you started: Claude Code on Sonnet (or OpenCode). It stays in charge
-and delegates:
+The model at the top is whatever you started: Claude Code on Sonnet (or OpenCode). It stays in charge and
+delegates cheap work to the light tier:
 
-- **Light work to the cheap worker.** The Claude Code plugin ships an MCP tool, `jev_delegate_light`,
-  that runs `opencode run --model opencode-go/deepseek-v4.1-flash#max "<task>"` in your project and
-  returns the report plus `git status`. The hook adds a one-line hint when Jev judges a prompt light.
-  This spends your flat OpenCode Go allowance instead of Claude quota.
-- **Broad searches and parallel work to Claude subagents,** with a `model` chosen for them (the
-  built-in `Explore` keeps its own small model).
-- **OpenCode as the orchestrator:** `jev-for-all opencode-agents` prints a `jev-light` subagent pinned
-  to the light model (the `variant` field is unverified against OpenCode's agent schema).
-
-Needs a working OpenCode Go login: if `opencode auth list` shows it but runs say "Invalid
-credential", run `opencode auth login` again.
+- **Light on Claude (default).** `jev-for-all start` launches a stronger tier with a `jev-light` subagent
+  (`--agents`, built from `models.json`, so a config change applies at the next launch), and the hook adds a
+  one-line "use a subagent with `model: haiku`" hint when Jev judges a prompt light.
+- **Light on OpenCode.** Set `"light": { "harness": "opencode", "model": "opencode-go/..." }`. The plugin then
+  advertises an MCP tool, `jev_delegate_light`, that runs `opencode run --model <model>#max "<task>"` in your
+  project and returns the report plus `git status`; it advertises nothing when light is on Claude, so it costs
+  no tokens then. Needs a working OpenCode Go login (`opencode auth login`; `jev-for-all doctor --deep` tests it).
+- **Broad searches and parallel work to Claude subagents,** with a `model` chosen for them (the built-in
+  `Explore` keeps its own small model).
+- **OpenCode as the orchestrator:** `jev-for-all opencode-agents` prints a `jev-light` subagent pinned to the
+  light model when light is on OpenCode (the `variant` field is unverified against OpenCode's agent schema).
 
 ### What it measured
 

@@ -31,6 +31,21 @@ if they are missing.
 Developing from a checkout: `claude --plugin-dir adapters/claude-code` for one run, or
 `claude plugin marketplace add <checkout>` then `claude plugin install system-one@jev-for-all`.
 
+## How model and subagent selection plug into Claude Code
+
+A hook cannot change the session's model, so the work is split across what Claude Code does let you control:
+
+| Layer | Mechanism | When it runs | Binding? |
+| --- | --- | --- | --- |
+| Session model and effort | `jev-for-all start` runs `claude --model <m> --effort <e>` | once, at launch | yes |
+| Light worker | `--agents` defines `jev-light` on the light model at launch | once, at launch | the main agent chooses to use it |
+| Per-prompt delegation | `UserPromptSubmit` hook adds a `<system_one_agents>` hint naming a subagent and its `model` (the Agent tool's `model` parameter beats any other setting) | every prompt | advisory |
+| Start-up note | hook `systemMessage` tells you what `start` would have chosen | first prompt | none |
+| OpenCode worker | MCP tool `jev_delegate_light`, only when light is on OpenCode | when the agent calls it | the agent calls it |
+
+The first two are deterministic and free of per-prompt cost. The hook layer costs one Jev call per prompt and a
+few tokens of hint, and the model can ignore it, so it is the first thing to switch off if you want less.
+
 ## Environment
 
 | Variable | Meaning |

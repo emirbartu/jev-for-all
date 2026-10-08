@@ -107,9 +107,9 @@ async function userPromptSubmit(input: HookInput): Promise<void> {
   }
   const plan = resolvePlan(tier)
   const firstPrompt = messages === 1
-  // Light work goes to the cheap worker; anything else that Jev wants delegated goes to a Claude subagent
+  // Light work goes to the cheap worker (an OpenCode model via the MCP tool, or a Claude subagent on the light model); anything else that Jev wants delegated goes to a Claude subagent
   // (Explore keeps its own small model, the rest follow the standard tier's model).
-  if (tier && plan.tier === "light") context.push(lightHint())
+  if (tier && plan.tier === "light") context.push(plan.harness === "opencode" ? lightHint() : agentHint({ id: "general-purpose" }, plan.model))
   else if (agent) context.push(agentHint(agent, agent.id === "Explore" ? undefined : plan.harness === "claude" ? plan.model : undefined))
   const out: Record<string, unknown> = {}
   if (context.length > 0) out.hookSpecificOutput = { hookEventName: "UserPromptSubmit", additionalContext: context.join("\n\n") }

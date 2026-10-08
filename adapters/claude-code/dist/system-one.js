@@ -43512,7 +43512,7 @@ This is cheap, mechanical work. Hand it to the jev_delegate_light tool (it runs 
       xhigh: "xhigh: a very hard problem that needs long, careful reasoning"
     },
     tierConfig: {
-      light: { harness: "opencode", model: "opencode-go/deepseek-v4.1-flash", effort: "max" },
+      light: { harness: "claude", model: "haiku", effort: "max" },
       standard: { harness: "claude", model: "sonnet", effort: "auto" },
       heavy: { harness: "claude", model: "sonnet", effort: "auto", minEffort: "high" }
     },
@@ -44296,7 +44296,7 @@ async function userPromptSubmit(input) {
   const plan = resolvePlan(tier);
   const firstPrompt = messages === 1;
   if (tier && plan.tier === "light")
-    context.push(lightHint());
+    context.push(plan.harness === "opencode" ? lightHint() : agentHint({ id: "general-purpose" }, plan.model));
   else if (agent)
     context.push(agentHint(agent, agent.id === "Explore" ? undefined : plan.harness === "claude" ? plan.model : undefined));
   const out = {};

@@ -39,7 +39,8 @@ export async function runLight(task: string, cwd = process.cwd()): Promise<strin
   return `${tail.trim()}\n\n--- git status ---\n${changed}`
 }
 
-const tools = [
+// Advertised only when the light tier runs on OpenCode; otherwise the tool would be dead weight in every session.
+const allTools = [
   {
     name: "jev_delegate_light",
     description: DESCRIPTION,
@@ -62,7 +63,7 @@ async function handle(message: { id?: number | string; method?: string; params?:
     case "ping":
       return reply({})
     case "tools/list":
-      return reply({ tools })
+      return reply({ tools: loadTiers().light.harness === "opencode" ? allTools : [] })
     case "tools/call": {
       const args = message.params?.arguments ?? {}
       if (message.params?.name !== "jev_delegate_light" || typeof args.task !== "string") {

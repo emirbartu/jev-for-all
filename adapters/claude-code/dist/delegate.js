@@ -117,7 +117,7 @@ This is cheap, mechanical work. Hand it to the jev_delegate_light tool (it runs 
       xhigh: "xhigh: a very hard problem that needs long, careful reasoning"
     },
     tierConfig: {
-      light: { harness: "opencode", model: "opencode-go/deepseek-v4.1-flash", effort: "max" },
+      light: { harness: "claude", model: "haiku", effort: "max" },
       standard: { harness: "claude", model: "sonnet", effort: "auto" },
       heavy: { harness: "claude", model: "sonnet", effort: "auto", minEffort: "high" }
     },
@@ -336,7 +336,7 @@ async function runLight(task, cwd = process.cwd()) {
 --- git status ---
 ${changed}`;
 }
-var tools = [
+var allTools = [
   {
     name: "jev_delegate_light",
     description: DESCRIPTION,
@@ -358,7 +358,7 @@ async function handle(message) {
     case "ping":
       return reply({});
     case "tools/list":
-      return reply({ tools });
+      return reply({ tools: loadTiers().light.harness === "opencode" ? allTools : [] });
     case "tools/call": {
       const args = message.params?.arguments ?? {};
       if (message.params?.name !== "jev_delegate_light" || typeof args.task !== "string") {

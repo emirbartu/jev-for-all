@@ -32,7 +32,7 @@ jobs:
           export XDG_CONFIG_HOME=$(mktemp -d)
           echo '{"hook_event_name":"SessionStart"}' | bun run "$copy/dist/system-one.js"
           test -f "$XDG_CONFIG_HOME/jev-for-all/models.json" && test -f "$XDG_CONFIG_HOME/jev-for-all/config.json"
-          echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | bun run "$copy/dist/delegate.js" | grep -q jev_delegate_light
+          echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | bun run "$copy/dist/delegate.js" | grep -q '"tools"'
           git diff --exit-code -- adapters/claude-code/dist adapters/claude-code/browser-mcp || { echo "dist is stale: run 'bun run build' and commit"; exit 1; }
       - uses: actions/setup-node@v4
         with:

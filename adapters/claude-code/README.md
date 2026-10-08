@@ -14,7 +14,7 @@ the OpenCode adapter does for tool routing.
 
 ## Install
 
-From anywhere: `bunx jev-for-all init` (see the main README), or inside Claude Code:
+From anywhere: `bunx jev-for-all@latest init` (see the main README), or inside Claude Code:
 
 ```text
 /plugin marketplace add emirbartu/jev-for-all

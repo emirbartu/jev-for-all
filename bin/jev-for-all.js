@@ -219,6 +219,7 @@ Usage:
   jev-for-all pick "<first prompt>"       print that decision without launching
   jev-for-all opencode-agents             print the cheap-worker subagent for opencode.json
   jev-for-all install                     OpenCode only (init does this too)
+  jev-for-all --version
 
 init is safe to re-run. It creates ~/.config/jev-for-all/{config,models}.json if missing, registers the
 OpenCode plugin, and installs the Claude Code plugin. doctor checks that everything works.
@@ -451,8 +452,19 @@ async function main() {
   }
   if (args.command === "init") return init(args)
   if (args.command === "doctor") return doctor(args)
-  if (args.command !== "install") {
+  if (args.command === "version" || process.argv.includes("--version")) {
+    console.log(JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version)
+    return
+  }
+  if (args.command === "help") {
     console.log(USAGE)
+    return
+  }
+  if (args.command !== "install") {
+    // bunx and npx cache the first version they download; an old copy does not know newer commands.
+    console.error(`jev-for-all: unknown command "${args.command}".\nIf you ran this through bunx or npx you may have an old cached copy: use \`bunx jev-for-all@latest ${args.command}\`.\n`)
+    console.error(USAGE)
+    process.exitCode = 2
     return
   }
   const configPath = resolveConfigPath(args.config)

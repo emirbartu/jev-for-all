@@ -3,8 +3,8 @@
 Run these, in order. Every step is idempotent.
 
 ```bash
-bunx jev-for-all init --key <OPENROUTER_KEY>     # or: npx jev-for-all init
-bunx jev-for-all doctor
+bunx jev-for-all@latest init --key <OPENROUTER_KEY>     # or: npx jev-for-all@latest init
+bunx jev-for-all@latest doctor
 ```
 
 Requirements: [bun](https://bun.sh) on `PATH`. Claude Code and OpenCode are each optional; `init` skips
@@ -28,7 +28,7 @@ Flags: `--no-claude`, `--no-opencode`, `--dry-run`, `--config <opencode config p
 
 ## Verify
 
-`bunx jev-for-all doctor` prints one line per check (bun, both config files, backend, a live decision,
+`bunx jev-for-all@latest doctor` prints one line per check (bun, both config files, backend, a live decision,
 the Claude Code plugin, the OpenCode Go login) and exits non-zero if something is wrong.
 `doctor --deep` also sends a few tokens to DeepSeek to prove the OpenCode Go credential works.
 Restart Claude Code and OpenCode after the first install.

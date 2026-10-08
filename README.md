@@ -17,9 +17,11 @@ answers.
 ## Install
 
 ```bash
-bunx jev-for-all init        # or: npx jev-for-all init
+bunx jev-for-all@latest init        # or: npx jev-for-all@latest init
 jev-for-all doctor           # checks every piece and says how to fix what is wrong
 ```
+
+Use `@latest`: `bunx` and `npx` cache the first version they ever downloaded, so a bare `bunx jev-for-all init` can run an old copy that does not know `init`. (`bun pm cache rm` clears it.)
 
 `init` is safe to re-run. It needs [bun](https://bun.sh) (the Claude Code hook, the MCP tool and the
 launcher run on it) and does four things:
